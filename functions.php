@@ -1,0 +1,3425 @@
+<?php 
+@ini_set( 'upload_max_size' , '256M' );
+@ini_set( 'post_max_size', '256M');
+@ini_set( 'max_execution_time', '300' );
+
+add_action( 'wp_enqueue_scripts', 'salient_child_enqueue_styles', 100);
+
+function salient_child_enqueue_styles() {
+		
+		$nectar_theme_version = nectar_get_theme_version();
+		wp_enqueue_style( 'salient-child-style', get_stylesheet_directory_uri() . '/style.css', '', $nectar_theme_version );
+        wp_enqueue_style( 'inov-modal-style', get_stylesheet_directory_uri() . '/modal/inov-modal.css', '', 1 );
+        
+        //
+        wp_enqueue_script( 'inov-modal', get_stylesheet_directory_uri() . '/modal/bootstrap.min.js', array('jquery'), '3.1.4', true );
+
+		
+    if ( is_rtl() ) {
+   		wp_enqueue_style(  'salient-rtl',  get_template_directory_uri(). '/rtl.css', array(), '1', 'screen' );
+		}
+}
+
+// Add js-cookie library
+add_action('wp_enqueue_scripts', 'enqueue_js_cookie_library', 5);
+
+function enqueue_js_cookie_library() {
+    wp_enqueue_script(
+        'js-cookie',
+        'https://cdn.jsdelivr.net/npm/js-cookie@3.0.5/dist/js.cookie.min.js',
+        array(),
+        '3.0.5',
+        false // Load in header, before other scripts
+    );
+}
+
+/* Remove the salient studio */ 
+function nectar_generate_salient_studio_button() { 
+	return false; 
+  } 
+ function nectar_custom_studio_templates_for_vc() { 
+   return false; 
+ }
+
+
+// Greenhouse
+// Add Query Variable to Job Pages
+
+function PREFIX_add_job_query_vars($aVars) {
+    $aVars[] = "gh_jid";
+    return $aVars;
+  }
+
+add_filter('query_vars', 'PREFIX_add_job_query_vars');
+
+/**
+ * Removes some menus by page.
+ */
+function wpdocs_remove_menus(){
+   
+  remove_menu_page( 'edit.php' );                   //Posts
+  remove_menu_page( 'edit-comments.php' );          //Comments
+  remove_menu_page( 'admin.php?page=unitecreator');  //Unlimited Addons
+//   remove_menu_page( 'themes.php' );                 //Appearance
+//   remove_menu_page( 'plugins.php' );                //Plugins
+//   remove_menu_page( 'tools.php' );                  //Tools
+//   remove_menu_page( 'options-general.php' );        //Settings
+   
+}
+add_action( 'admin_menu', 'wpdocs_remove_menus' );
+
+/** Search for posts by author */
+function search_custom_post_type($title_string, $post_type) {
+  global $wpdb;
+
+  // Prepare the search query
+  $search_query = '%' . $wpdb->esc_like($title_string) . '%';
+  $search_results = $wpdb->get_results($wpdb->prepare("
+      SELECT ID, post_title
+      FROM $wpdb->posts
+      WHERE post_type = %s
+      AND post_status = 'publish'
+      AND post_title LIKE %s
+  ", $post_type, $search_query));
+
+  // If search results are found
+  if ($search_results) {
+      // Return the permalink of the first result
+      return get_permalink($search_results[0]->ID);
+  } else {
+      return false; // No results found
+  }
+}
+
+add_shortcode("post_categories", "post_categories");
+function post_categories( $atts, $content = null ) {
+global $post;
+$categories = get_the_category_list( ', ', '', $post->ID );
+ return '<div class="post-tag">' . $categories . '</div>';
+}
+
+add_action('init', 'post_categories');
+
+add_shortcode('faq',function($atts,$content = ""){
+    $divID = 'tab_'.uniqid();
+    $accordion = ' <div id="'.$divID.'" class="toggle default" data-inner-wrap="true"><h3><a href="#" class="toggle-heading"><i class="fa fa-plus-circle"></i> '.$atts["question"].'</a></h3><div><div class="inner-toggle-wrap">
+    <div class="wpb_text_column wpb_content_element ">
+        <div class="wpb_wrapper">
+            <p>'.$content.'</p>
+        </div>
+    </div>
+    </div></div></div>';   
+   return $accordion;
+   });
+   
+   
+   add_shortcode('toggle',function($atts,$content = ""){
+    $divID = 'tab_'.uniqid();
+    $tab = '<div class="toggles accordion" data-starting="closed" data-style="default">
+            '.do_shortcode($content).'
+        </div>';   
+   return $tab;
+   });
+   
+
+   function inov_search_filter( $query ) {
+    if ( ! $query->is_admin && $query->is_search && $query->is_main_query() ) {
+     //$query->set( 'post__not_in', array( 10,11,20,105 ) );
+    }
+  }
+  add_action( 'pre_get_posts', 'inov_search_filter' );
+
+//add_action('admin_init', 'inov_page_filter_setting');  
+
+function inov_page_filter_setting() {  
+    add_settings_section(  
+        'inov_page_filter_setting', // Section ID 
+        'Exclude Pages', // Section Title
+        'inov_page_filter_input', //Callback
+        'reading' 
+    );
+    
+}
+  
+function inov_page_filter_input() { // Section Callback
+    echo '<input type="text" name="filter_ids">';  
+}
+
+/** Events shortcode  */
+add_shortcode('inov_events_list',function($atts,$content = ""){
+    if(!empty($atts)){
+    $tag = $atts['tag'];
+    }
+    $query = new WP_Query(array(
+        'post_status' => 'publish',
+        'post_type' => 'events', // or 'any'
+        'posts_per_page' => -1,
+        'meta_key'          => 'events_startdate',
+        'orderby'           => 'meta_value',
+        'order'             => 'ASC'
+     ));
+
+    if($tag != ""){
+        
+        
+        $query = new WP_Query(
+            array( 
+                'post_status' => 'publish',
+                'post_type' => "events",
+                'posts_per_page' => -1,
+                'tag' => $tag,
+                'meta_key'          => 'events_startdate',
+                'orderby'           => 'meta_value',
+                'order'             => 'ASC'
+            ) );
+    
+    }
+    $post = '';
+    while ($query->have_posts()) : $query->the_post(); 
+   
+    
+
+    $tags = get_the_tags(get_the_ID());
+    $firsttag='';
+
+    if($tags){
+      $tagarr= "";
+      foreach($tags as $the_tag){
+        $tagarr .='<span class="tag-'.strtolower($the_tag->name).'">'.$the_tag->name.'</span>';
+      }
+        $firsttag = '<div class="svc_post_cat">'.$tagarr.'</div>';       
+    }
+    $image = wp_get_attachment_url( get_post_thumbnail_id(get_the_ID()));
+    
+    if($image =="" ){
+        $image = "https://www.inovalon.com/wp-content/uploads/2022/08/events-holder.jpg";
+    }
+
+    $now = new DateTime();
+    $startdate = new DateTime(get_field( "events_startdate" ),new DateTimeZone('America/New_York'));
+    $enddate = new DateTime(get_field( "events_enddate" ),new DateTimeZone('America/New_York'));
+    $featured_array = array();
+    if(get_field('featured')){
+        $featured_array[] = get_the_ID();
+        $featured .='<div style="" class="sticky-event vc_col-sm-3 product-card wpb_column column_container vc_column_container col padding-2-percent inherit_tablet inherit_phone instance-37 one-fourths clear-both" data-using-bg="true" data-border-radius="20px" data-shadow="small_depth" data-border-animation="" data-border-animation-delay="" data-border-width="1px" data-border-style="" data-border-color="#f4f4f4" data-padding-pos="bottom" data-has-bg-color="true" data-bg-color="#ffffff" data-bg-opacity="1" data-hover-bg="#f4f4f4" data-hover-bg-opacity="1" data-animation="" data-delay="0">
+        <div class="vc_column-inner" style="border: 1px solid #f4f4f4;"><a class="column-link" target="_self" href="'.get_the_permalink().'"></a><div class="column-bg-overlay-wrap column-bg-layer" data-bg-animation="none"><div class="column-bg-overlay" style="opacity: 1; background-color: #ffffff;"></div></div>
+            
+        <div class="wpb_wrapper">
+                
+                <!---->
+                <div data-midnight="" data-column-margin="default" class="wpb_row vc_row-fluid vc_row inner_row" style=""><div class="row-bg-wrap"> <div class="row-bg"></div> </div><div class="row_col_wrap_12_inner col span_12  left">
+    <div class="vc_col-sm-12 wpb_column column_container vc_column_container col child_column no-extra-padding inherit_tablet inherit_phone " data-padding-pos="left-right" data-has-bg-color="false" data-bg-color="" data-bg-opacity="1" data-animation="" data-delay="0">
+        <div class="vc_column-inner">
+        <div class="wpb_wrapper">
+            <div class="img-with-aniamtion-wrap center" data-max-width="100%" data-max-width-mobile="default" data-shadow="none" data-animation="fade-in">
+      <div class="inner">
+        <div class="hover-wrap" style="opacity: 1;"> 
+          <div class="hover-wrap-inner">
+            <img class="img-with-animation skip-lazy cards-product-image animated-in" data-delay="0" height="352" width="800" data-animation="fade-in" src="'.$image.'" alt="" >
+          </div>
+        </div>
+      </div>
+    </div>'.$firsttag.'
+    <div class="event-content"><h3 style="font-size: 24px;color: #4e84c4;line-height: 32px;text-align: left" class="vc_custom_heading vc_custom_1651242283941">'.get_the_title().'</h3>
+    <div class="event-location text-center">
+    <p><img src="'.get_stylesheet_directory_uri().'/img/map-alt.png"> '.get_field( "events_location" ).'<div style="clear:both"></div></p>
+    </div>
+    <div class="event-date">
+    <p><img src="'.get_stylesheet_directory_uri().'/img/calendar-star.png"> '.date("M j", strtotime(get_field( "events_startdate" ))).' - '.date("M j", strtotime(get_field( "events_enddate" ))).', '.date("Y", strtotime(get_field( "events_enddate" ))).'</p>
+    </div>
+    
+    <div class="divider-wrap" data-alignment="default"><div style="height: 10px;" class="divider"></div></div>
+    
+    </div>
+        </div> 
+    </div>
+    </div> 
+    </div></div>
+    <!---->
+    </div> 
+        </div>
+    </div>';
+    }
+    if($startdate >= $now && !in_array(get_the_id(),$featured_array)){
+    $post .='<div style="" class="vc_col-sm-3 product-card wpb_column column_container vc_column_container col padding-2-percent inherit_tablet inherit_phone instance-37 one-fourths clear-both" data-using-bg="true" data-border-radius="20px" data-shadow="small_depth" data-border-animation="" data-border-animation-delay="" data-border-width="1px" data-border-style="" data-border-color="#f4f4f4" data-padding-pos="bottom" data-has-bg-color="true" data-bg-color="#ffffff" data-bg-opacity="1" data-hover-bg="#f4f4f4" data-hover-bg-opacity="1" data-animation="" data-delay="0">
+    <div class="vc_column-inner" style="border: 1px solid #f4f4f4;"><a class="column-link" target="_self" href="'.get_the_permalink().'"></a><div class="column-bg-overlay-wrap column-bg-layer" data-bg-animation="none"><div class="column-bg-overlay" style="opacity: 1; background-color: #ffffff;"></div></div>
+        
+    <div class="wpb_wrapper">
+            
+            <!---->
+            <div data-midnight="" data-column-margin="default" class="wpb_row vc_row-fluid vc_row inner_row" style=""><div class="row-bg-wrap"> <div class="row-bg"></div> </div><div class="row_col_wrap_12_inner col span_12  left">
+<div class="vc_col-sm-12 wpb_column column_container vc_column_container col child_column no-extra-padding inherit_tablet inherit_phone " data-padding-pos="left-right" data-has-bg-color="false" data-bg-color="" data-bg-opacity="1" data-animation="" data-delay="0">
+    <div class="vc_column-inner">
+    <div class="wpb_wrapper">
+        <div class="img-with-aniamtion-wrap center" data-max-width="100%" data-max-width-mobile="default" data-shadow="none" data-animation="fade-in">
+  <div class="inner">
+    <div class="hover-wrap" style="opacity: 1;"> 
+      <div class="hover-wrap-inner">
+        <img class="img-with-animation skip-lazy cards-product-image animated-in" data-delay="0" height="352" width="800" data-animation="fade-in" src="'.$image.'" alt="" >
+      </div>
+    </div>
+  </div>
+</div>'.$firsttag.'
+<div class="event-content"><h3 style="font-size: 24px;color: #4e84c4;line-height: 32px;text-align: left" class="vc_custom_heading vc_custom_1651242283941">'.get_the_title().'</h3>
+<div class="event-location text-center">
+<p><img src="'.get_stylesheet_directory_uri().'/img/map-alt.png"> '.get_field( "events_location" ).'<div style="clear:both"></div></p>
+</div>
+<div class="event-date">
+<p><img src="'.get_stylesheet_directory_uri().'/img/calendar-star.png"> '.date("M j", strtotime(get_field( "events_startdate" ))).' - '.date("M j", strtotime(get_field( "events_enddate" ))).', '.date("Y", strtotime(get_field( "events_enddate" ))).'</p>
+</div>
+
+<div class="divider-wrap" data-alignment="default"><div style="height: 10px;" class="divider"></div></div>
+
+</div>
+    </div> 
+</div>
+</div> 
+</div></div>
+<!---->
+</div> 
+    </div>
+</div>'; 
+    }
+    endwhile;
+    $container ='<div class="inov_events row_col_wrap_12 col span_12 dark left">'.$featured.$post.'</div>';
+    echo $container; 
+
+});
+
+/**CSP Header */
+add_filter('admin_init', 'register_my_general_settings_fields');
+function register_my_general_settings_fields()
+{
+register_setting('general', 'csp_policy', 'esc_attr');
+add_settings_field('csp_policy', '<label for="custom_field">'.__('CSP Policy' , 'csp_policy' ).'</label>' , 'general_settings_custom_fields_html', 'general');
+}
+
+function general_settings_custom_fields_html()
+{
+$value = get_option( 'csp_policy', '' );
+echo '<textarea style="width: 500px;min-height: 300px;" name="csp_policy" id="csp_policy">' . $value . '</textarea>';
+}
+
+function add_csp_header() {
+    $value = get_option( 'csp_policy', '' );
+    if($value!=""){
+  ?>
+<meta http-equiv="Content-Security-Policy" content="<?php echo html_entity_decode($value,ENT_QUOTES);?>">
+<?php
+	}
+}
+add_action( 'wp_head', 'add_csp_header',1 );
+
+/**Author Card**/
+class AuthorCard extends WPBakeryShortCode {
+
+  function __construct() {
+    add_action( 'vc_before_init', array( $this, 'author_card_map' ) );
+    add_shortcode( 'author_card', array( $this, 'author_card_shortcode' ) );
+  }
+
+  public function author_card_map() {
+    vc_map( array(
+      'name'        => __( 'Author Card', 'text-domain' ),
+      'description' => __( 'Displays the author information and image', 'text-domain' ),
+      'base'        => 'author_card',
+      'class'       => '',
+      'icon'        => 'icon-wpb-ui-custom_heading',
+      'category'    => __( 'Content', 'text-domain' ),
+      'params'      => array(
+        array(
+          'type'        => 'textfield',
+          'holder'      => 'div',
+          'class'       => 'author-name',
+          'param_name'  => 'author_name',
+          'heading'     => __( 'Author Name', 'text-domain' ),
+        ),
+        array(
+          'type'        => 'textarea_html',
+          'holder'      => 'div',
+          'class'       => 'author-byline',
+          'param_name'  => 'author_byline',
+          'heading'     => __( 'Author Byline', 'text-domain' ),
+        ),
+        array(
+          'type'        => 'attach_image',
+          'holder'      => 'div',
+          'class'       => 'author-img',
+          'param_name'  => 'author_img',
+          'heading'     => __( 'Author Image', 'text-domain' ),
+        ),
+      ),
+    ) );
+  }
+
+  public function author_card_shortcode( $atts ) {
+    $atts = shortcode_atts( array(
+      'author_name'    => '',
+      'author_byline'  => '',
+      'author_img'     => '',
+    ), $atts );
+
+    ob_start();
+    ?>
+      <div class="author-card">
+        <div class="author-img">
+          <?php echo wp_get_attachment_image( $atts['author_img'], 'thumbnail' ); ?>
+        </div>
+        <div class="author-info">
+          <h3 class="author-name">
+            <?php echo esc_html( $atts['author_name'] ); ?>
+          </h3>
+          <div class="author-byline">
+            <?php echo $atts['author_byline']; ?>
+          </div>
+        </div>
+      </div>
+    <?php
+    return ob_get_clean();
+  }
+}
+
+new AuthorCard();
+
+/**
+ * Plugin Name: WPBakery PDF Viewer
+**/
+
+// Register the WPBakery element
+add_action( 'vc_before_init', 'wpbakery_pdf_viewer_vc_element' );
+
+function wpbakery_pdf_viewer_vc_element() {
+  vc_map( array(
+    'name' => __( 'PDF Viewer', 'text-domain' ),
+    'base' => 'wpbakery_pdf_viewer',
+    'category' => __( 'Content', 'text-domain' ),
+    'params' => array(
+      array(
+        'type' => 'attach_image',
+        'heading' => __( 'PDF File', 'text-domain' ),
+        'param_name' => 'file',
+        'description' => __( 'Select the PDF file to embed.', 'text-domain' ),
+      ),
+      array(
+        'type' => 'textfield',
+        'heading' => __( 'Width', 'text-domain' ),
+        'param_name' => 'width',
+        'description' => __( 'Enter the width of the PDF viewer in pixels or percentage.', 'text-domain' ),
+        'value' => '100%',
+      ),
+      array(
+        'type' => 'textfield',
+        'heading' => __( 'Height', 'text-domain' ),
+        'param_name' => 'height',
+        'description' => __( 'Enter the height of the PDF viewer in pixels.', 'text-domain' ),
+        'value' => '500px',
+      ),
+    ),
+  ) );
+}
+
+// Render the element
+add_shortcode( 'wpbakery_pdf_viewer', 'wpbakery_pdf_viewer_shortcode' );
+
+function wpbakery_pdf_viewer_shortcode( $atts ) {
+  extract( shortcode_atts( array(
+    'file' => '',
+    'width' => '100%',
+    'height' => '500px',
+  ), $atts ) );
+
+  $file_url = '';
+  if ( ! empty( $file ) ) {
+    $file_url = wp_get_attachment_url( $file );
+  }
+
+  $output = '';
+  if ( ! empty( $file_url ) ) {
+    $output .= '<div class="wpbakery-pdf-viewer">';
+    $output .= sprintf( '<embed src="%s" width="%s" height="%s">', esc_url( $file_url ), esc_attr( $width ), esc_attr( $height ) );
+    $output .= sprintf( '<a href="%s" download>Download PDF</a>', esc_url( $file_url ) );
+    $output .= '</div>';
+  }
+
+  return $output;
+}
+
+ function inov_product_menu($menu_name){
+          $col_1="";
+          $col_2= "";
+          $col_3= "";
+          $parent_array= array();
+          $subs_array= array();
+          $sub_2_array = array();
+
+           $menu = wp_get_nav_menu_object( $menu_name );
+        
+        
+           $menu_items = wp_get_nav_menu_items($menu->term_id);
+        
+           //col_1
+       
+           foreach ( (array) $menu_items as $key => $menu_item ) {
+               $title = $menu_item->title;
+               $url = $menu_item->url;
+                 if( $menu_item->menu_item_parent == 0){ // Parent
+                   $col_1 .= '<li data-sub-menu="#sub-2-'.$menu_item->ID.'" class="hover-underline-animation parent"><a href="' . $url . '">' . $title . '</a><p>'.$menu_item->description.'</p></li>';
+                   $parent_array[] = $menu_item->ID;
+               }else{
+                $subs_array[] = $menu_item->ID;
+               }
+           } // END foreach
+          // var_dump($subs_array);die();
+
+           foreach($parent_array as $parent){ 
+
+           foreach ( (array) $menu_items as $key => $menu_item ) {
+            if( $menu_item->menu_item_parent == $parent){
+                
+                $col_array[$parent][] = $menu_item;
+            }
+
+           }
+        }
+
+
+ 
+
+     
+        //col_2
+           $i=0;
+           foreach($parent_array as $parent){ 
+            $class='';
+            if($i==0){
+                $class = "active";
+            }
+          
+          
+            $col_2 .='<ul id="sub-2-'.$parent.'" class="submenu-depth-2 '.$class.'">';
+        
+              
+                
+                $second_list ='';
+                foreach($col_array[$parent] as $second_item){
+                  
+                $second_list .= '<li class="hover-underline-animation child"  data-sub="#sub-3-'.$second_item->ID.'"><a href="' . $second_item->url . '">' . $second_item->title . '</a><p>'.$second_item->description.'</p></li>';
+                $third_col_array[] = $second_item->ID;
+              
+             
+                }
+    
+              
+             
+            
+               $col_2 .=$second_list.'</ul>';
+               $i++;
+          
+        
+           }
+         
+
+           //col_3
+           foreach($subs_array as $sub){ 
+
+            foreach ( (array) $menu_items as $key => $menu_item ) {
+             if( $menu_item->menu_item_parent == $sub){
+                 
+                 $sub_2_array[$sub][] = $menu_item;
+             }
+ 
+            }
+         }
+
+         foreach($third_col_array as $third){
+            $class='';
+            if($i==0){
+                $class = "active";
+            }
+          
+
+            $col_3 .='<ul id="sub-3-'.$third.'" class="'.$class.'">';
+        
+              
+                
+                $second_list ='';
+                foreach($sub_2_array[$third] as $second_item){
+               $menu_item_options = maybe_unserialize( get_post_meta( $second_item->ID, 'nectar_menu_options', true ) );
+             
+               $image="";
+               $icon = "";
+               if($menu_item_options){
+               $image = $menu_item_options['menu_item_link_bg_img_custom']['url'];
+$image = str_replace('https:', '', $image);
+               $icon = '<div class="icon" style="background:'.$menu_item_options['menu_item_link_color_overlay'].'"><img src="'.$image.'" alt="'.$second_item->title.'"></div>';
+                }
+                $second_list .= '<li class="child">'.$icon.'<a href="' . $second_item->url . '">' . $second_item->title . '</a><p>'.$second_item->description.'</p></li>';
+                $third_col_array[] = $second_item->ID;
+              
+             
+                }
+    
+              
+             
+            
+        $col_3 .=$second_list.'</ul>';
+               $i++;
+          
+
+         }
+
+
+         return '<div id="nav-1" class="inov-nav active">
+         <div class="container">
+           <div class="row">
+             
+           <div class="col-4 bg-nav-blue">
+       
+             </div>
+             <div class="col-4 text-right">
+                 <div class="close-menu">
+                   <i class="fa fa-times"></i>
+                   
+                 </div>
+       
+           </div>
+     </div>
+     
+     
+     <div class="row">
+           <div class="col-4 inov-sub-menu">
+             <ul class="main-sub">
+             '.$col_1.'
+             
+             </ul>
+     
+           </div>
+     
+           <div class="col-4 inov-sub-menu depth depth-1">
+           '.$col_2.'
+     
+     
+             
+           </div>
+     
+           <div class="col-4 inov-sub-menu depth depth-2">
+          '.$col_3.'
+             
+           </div>
+           
+         </div>
+     
+             </div>
+     
+           
+         </div>
+     ';
+     
+        }
+
+
+  /** Media Post Grid */
+
+  function wpdocs_shortcode_scripts() {
+    global $post;
+    if ( is_a( $post, 'WP_Post' ) && has_shortcode( $post->post_content, 'inov_media') ) {
+      wp_enqueue_style( 'nectar-element-post-grid-css', get_template_directory_uri() . '/css/build/elements/element-post-grid.css' );
+
+      wp_enqueue_script('inov-media-js',get_stylesheet_directory_uri() . '/inov-media-scode.js', array('jquery'), '1.0', true);
+    }
+}
+add_action( 'wp_enqueue_scripts', 'wpdocs_shortcode_scripts');
+
+   function media_loop_shortcode($atts) {
+    // Create output variable
+    $output = '';
+    
+    $tag = explode('|',$atts['tag']);
+   
+    // Define query parameters
+    $args = array(
+        'post_type' => $atts['post_type'],
+        'tag_slug__in' =>$tag,
+        'posts_per_page' => $atts['per_page'],
+        'paged' => 1
+    );
+
+    // Perform the query
+    $query = new WP_Query($args);
+    
+    // Loop through the posts and output them
+    if ($query->have_posts()) {
+      $parent_category_name = 'podcasts'; // Replace with your parent category name
+
+// Get ID of parent category
+$parent_category_id = get_cat_ID($parent_category_name);
+
+$args = array(
+    'type'         => 'resource',
+    'child_of'     => 58,
+    'orderby'      => 'name',
+    'order'        => 'ASC',
+    'hide_empty'   => 0,
+    'taxonomy'     => 'resource_categories',
+);
+
+
+$categories = get_categories( $args );
+$series="";
+foreach ($categories as $category) {
+  $series.= '<option value="'.$category->name .'">'.$category->name .'</option>';
+}
+
+      $output='<div id="media-filter" class="container">
+      <div class="row">
+            <div class="col-md-6">
+            <div class="row">
+            <div class="col-md-6">
+           
+            <select id="series-filter"> <option value="hide">Filter by Series</option>
+            <option value="all">All Series</option>
+            '.$series.'
+</select>
+            </div>
+            <div class="col-md-6">
+            <select id="format-filter">
+            <option value="hide">Filter by Format</option>
+            <option value="all">All Formats</option>
+            <option value="audio">Audio</option>
+            <option value="video">Video</option>
+        </select>
+            </div>
+           
+            </div>
+            </div>
+
+            <div class="col-md-6">
+            <div class="sb-example-3">
+            <div class="search__container">
+  
+                <input id="search-media" class="search__input" type="text" placeholder="Search">
+            </div>
+          </div>
+            </div>
+           
+ </div>
+      </div>
+      
+      <div id="inov-media"
+      class="nectar-post-grid-wrap pod-grid text-color-light spacing-15px nectar-post-grid-wrap--fl-left all-loaded finished-animating"
+      data-el-settings=\'{"post_type":"custom","pagination":"","image_size":"large","aspect_ratio_image_size":"","display_categories":"yes","display_excerpt":"0","display_date":"yes","color_overlay":"","color_overlay_opacity":"","color_overlay_hover_opacity":"","card_bg_color":"#1e73be","grid_style":"content_under_image","hover_effect":"animated_underline","post_title_overlay":"","heading_tag":"default","enable_gallery_lightbox":"0","overlay_secondary_project_image":"","vertical_list_hover_effect":"none","vertical_list_read_more":"","filter_author":"","target":"_blank","authors":"","excerpt_length":""}\'
+      data-style="content_under_image"
+      data-query=\'{"post_type":"custom","posts_per_page":"10","order":"DESC","orderby":"date","offset":"0","cpt_name":"resource","custom_query_tax":"58","ignore_sticky_posts":"","filter_author":"","target":"_blank","authors":"","excerpt_length":""}\'
+      data-load-more-color="black"
+      data-load-more-text="Load More"
+  >
+      <div
+          class="nectar-post-grid"
+          data-indicator=""
+          data-indicator-style="default"
+          data-indicator-text-color="#fff"
+          data-indicator-color="#000"
+          data-indicator-text="View"
+          data-columns="4"
+          data-hover-effect="animated_underline"
+          data-text-style="default"
+          data-border-radius="10px"
+          data-grid-item-height="30vh"
+          data-grid-spacing="15px"
+          data-text-layout="top_left"
+          data-text-color="light"
+          data-text-hover-color="light"
+          data-shadow-hover="yes"
+          data-animation="fade-in-from-bottom"
+          data-cat-click="default"
+          data-lock-aspect=""
+          data-text-align="left"
+          data-card="yes"
+      >';
+        while ($query->have_posts()) {
+            $query->the_post();
+            $tags = get_the_tags();
+            $tag_names = array();
+            // Loop through each tag
+            foreach($tags as $tag) {
+                // Add the tag name to the array
+                $tag_names[] = $tag->name;
+            }
+            // Convert the array of tag names into a comma-separated string
+            $datatag = implode(', ', $tag_names);
+            $featured_img_url = wp_get_attachment_image_src(get_post_thumbnail_id(get_the_ID()), 'full')[0];
+            if($featured_img_url == ""){
+              $featured_img_url = "https://www.inovalon.com/wp-content/uploads/2023/02/what-is-longitudinal-patient-data.jpg";
+            }
+            $output .='<div class="nectar-post-grid-item nectar-underline animated-in" style="background-color:'.$atts['bg_color'].'; z-index: 100;" data-tags="all,'.$datatag.'" data-title="'.get_the_title().'">
+            <div class="inner">';
+            $output .= '<div class="nectar-post-grid-item-bg-wrap">
+            <div class="nectar-post-grid-item-bg-wrap-inner">
+                <a class="bg-wrap-link" aria-label="' . get_the_title() . '" href="'.get_the_permalink().'"></a>
+                <div class="nectar-post-grid-item-bg" style="background-image: url(\''.$featured_img_url.'\');"></div>
+            </div>
+        </div>';
+            $output .= '<div class="content">
+            <span class="meta-category"></span>
+            <div class="item-main">
+                <h3 class="post-heading">
+                    <a href="'.get_the_permalink().'"><span>' . get_the_title() . '</span></a>
+                </h3>
+                <div class="meta-date">'.get_the_date('F j, Y').'</div>
+            </div>
+        </div>';
+            $output .= '</div></div>';
+        }
+        $output .= '</div></div>
+        <div style="text-align:center">
+        <button id="load_more_posts" class="media-load-more" data-type='.$atts['post_type'].' data-tag='.$atts['tag'].' data-bg="'.$atts['bg_color'].'" data-page="1" data-per-page='.$atts['per_page'].'>Load More</button>
+        </div>';
+    } else {
+        $output .= '<p>No posts found.</p>';
+    }
+
+    // Start output buffering
+    ob_start();
+    
+    // Echo the output
+    echo $output;
+
+    // End output buffering and return the output
+    return ob_get_clean();
+}
+
+add_shortcode('inov_media', 'media_loop_shortcode');
+     
+/** Ajax Call */
+function enqueue_media_loop_scripts() {
+  // Enqueue our script
+  wp_enqueue_script('inov-functions',get_stylesheet_directory_uri() . '/inov-functions.js', array('jquery'), '1.0', true);
+
+  // Localize the script with data we'll use in JavaScript
+  wp_localize_script('inov-functions', 'inov_functions_params', array(
+      'ajax_url' => admin_url('admin-ajax.php'),
+      'security' => wp_create_nonce('load_more_posts'),
+  ));
+}
+
+add_action('wp_enqueue_scripts', 'enqueue_media_loop_scripts');
+
+
+
+function load_posts_by_ajax_callback() {
+  check_ajax_referer('load_more_posts', 'security');
+
+  $paged = $_POST['page'];
+  $per_page = $_POST['per_page'];
+  $post_type = $_POST['type'];
+  $tag = explode('|',$_POST['tag']);
+  $args = array(
+      'post_status'    => array( 'publish' ),
+      'post_type' =>  $post_type,
+      'tag_slug__in' =>$tag,
+      'posts_per_page' => $per_page,
+      'paged' => $paged,
+  );
+
+  $query = new WP_Query($args);
+  if ($query->have_posts()) {
+      while ($query->have_posts()) {
+          $query->the_post();
+          $tags = get_the_tags();
+          $tag_names = array();
+          // Loop through each tag
+          foreach($tags as $tag) {
+              // Add the tag name to the array
+              $tag_names[] = $tag->name;
+          }
+          // Convert the array of tag names into a comma-separated string
+          $datatag = implode(', ', $tag_names);
+          $featured_img_url = wp_get_attachment_image_src(get_post_thumbnail_id(get_the_ID()), 'full')[0];
+          if($featured_img_url == ""){
+            $featured_img_url = "https://www.inovalon.com/wp-content/uploads/2023/02/what-is-longitudinal-patient-data.jpg";
+          }
+          $output .= '<div class="nectar-post-grid-item nectar-underline animated-in" style="background-color: #1e73be; z-index: 100;" data-tags="all,'.$datatag.'" data-title="'.get_the_title().'">
+          <div class="inner">';
+          $output .= '<div class="nectar-post-grid-item-bg-wrap">
+          <div class="nectar-post-grid-item-bg-wrap-inner">
+              <a class="bg-wrap-link" aria-label="' . get_the_title() . '" href="'.get_the_permalink().'"></a>
+              <div class="nectar-post-grid-item-bg" style="background-image: url(\''.$featured_img_url.'\');"></div>
+          </div>
+      </div>';
+          $output .= '<div class="content">
+          <span class="meta-category"></span>
+          <div class="item-main">
+              <h3 class="post-heading">
+                  <a href="'.get_the_permalink().'"><span>' . get_the_title() . '</span></a>
+              </h3>
+              <div class="meta-date">'.get_the_date('F j, Y').'</div>
+          </div>
+      </div>';
+          $output .= '</div></div>';
+      }
+      echo $output;
+     
+  } else {
+      $output .= '<p>No posts found.</p>';
+  }
+  
+  wp_die();
+}
+
+add_action('wp_ajax_load_posts_by_ajax', 'load_posts_by_ajax_callback');
+add_action('wp_ajax_nopriv_load_posts_by_ajax', 'load_posts_by_ajax_callback');
+
+//Search media
+function search_media_by_ajax_callback() {
+    check_ajax_referer('load_more_posts', 'security');
+  
+    $paged = $_POST['page'];
+    $per_page = $_POST['per_page'];
+    $post_type = $_POST['type'];
+    $search_term = $_POST['search'];
+    $tag = explode('|',$_POST['tag']);
+    $args = array(
+       'post_status'    => array( 'publish' ),
+        'post_type' =>  $post_type,
+        'tag_slug__in' =>$tag,
+        'posts_per_page' => -1,
+        's'   => $search_term,
+    );
+  
+    $query = new WP_Query($args);
+    if ($query->have_posts()) {
+        while ($query->have_posts()) {
+            $query->the_post();
+            $tags = get_the_tags();
+            $tag_names = array();
+            // Loop through each tag
+            foreach($tags as $tag) {
+                // Add the tag name to the array
+                $tag_names[] = $tag->name;
+            }
+            // Convert the array of tag names into a comma-separated string
+            $datatag = implode(', ', $tag_names);
+            $featured_img_url = wp_get_attachment_image_src(get_post_thumbnail_id(get_the_ID()), 'full')[0];
+            if($featured_img_url == ""){
+              $featured_img_url = "https://www.inovalon.com/wp-content/uploads/2023/02/what-is-longitudinal-patient-data.jpg";
+            }
+            $output .= '<div class="nectar-post-grid-item nectar-underline animated-in" style="background-color: #1e73be; z-index: 100;" data-tags="all,'.$datatag.'" data-title="'.get_the_title().'">
+            <div class="inner">';
+            $output .= '<div class="nectar-post-grid-item-bg-wrap">
+            <div class="nectar-post-grid-item-bg-wrap-inner">
+                <a class="bg-wrap-link" aria-label="' . get_the_title() . '" href="'.get_the_permalink().'"></a>
+                <div class="nectar-post-grid-item-bg" style="background-image: url(\''.$featured_img_url.'\');"></div>
+            </div>
+        </div>';
+            $output .= '<div class="content">
+            <span class="meta-category"></span>
+            <div class="item-main">
+                <h3 class="post-heading">
+                    <a href="'.get_the_permalink().'"><span>' . get_the_title() . '</span></a>
+                </h3>
+                <div class="meta-date">'.get_the_date('F j, Y').'</div>
+            </div>
+        </div>';
+            $output .= '</div></div>';
+        }
+        echo $output;
+       
+    } else {
+        echo '<p>No posts found.</p>';
+    }
+    
+    wp_die();
+  }
+add_action('wp_ajax_search_media_by_ajax', 'search_media_by_ajax_callback');
+add_action('wp_ajax_nopriv_search_media_by_ajax', 'search_media_by_ajax_callback');
+
+/** Inov Video Player */
+// Check if WPBakery Page Builder is active
+if (function_exists('vc_map')) {
+  // Hook to integrate with WPBakery Page Builder
+  add_action('vc_before_init', 'vc_custom_video_player');
+
+  // Function to define the custom element
+  function vc_custom_video_player() {
+      vc_map(array(
+          "name" => __("Inov Video Player", "text-domain"),
+          "base" => "custom_video_player",
+          "class" => "",
+          "category" => __("Content", "text-domain"),
+          "params" => array(
+              array(
+                  "type" => "attach_image",
+                  "holder" => "img",
+                  "class" => "",
+                  "heading" => __("Poster Image", "text-domain"),
+                  "param_name" => "poster_image",
+                  "value" => "",
+                  "description" => __("Select a poster image for the video.", "text-domain")
+              ),
+              array(
+                  "type" => "textfield",
+                  "holder" => "div",
+                  "class" => "",
+                  "heading" => __("MP4 URL", "text-domain"),
+                  "param_name" => "mp4_url",
+                  "value" => "",
+                  "description" => __("Enter the URL of the MP4 file.", "text-domain")
+              )
+          )
+      ));
+  }
+
+  // Shortcode logic for the custom element
+  add_shortcode('custom_video_player', 'custom_video_player_html');
+
+  function custom_video_player_html($atts, $content = null) {
+      extract(shortcode_atts(array(
+          'poster_image' => '',
+          'mp4_url' => '',
+      ), $atts));
+
+      $poster_img_url = wp_get_attachment_image_src($poster_image, 'full');
+
+      ob_start();
+      ?>
+    
+      <div class="neo-video-player" id="popout-video-player">
+    <div class="video-control-part">
+<div class="closed video-social"><a href="#" data-type="twitter"><i class="fa fa-twitter"></i></a> <a href="#" data-type="facebook"><i class="fa fa-facebook"></i></a> <a href="#" data-type="linkedin"><i class="fa fa-linkedin"></i></a> <a href="#" class="close-social"><i class="fa fa-close"></i></a></div>
+<div class="video-control-general-part">
+<div class="play-btn video-inov-btn"></div>
+<div class="video-inov-btn drop-btn">
+<div class="box-sound">
+<div class="volume">
+<div class="bar-volume"></div>
+</div>
+</div>
+<div class="sound-btn video-inov-btn"></div>
+</div>
+</div>
+          <div class="video-control-bar-part">
+              <div class="bar-bg">
+                  <div class="bar-progress">
+                      <div class="bar-time">
+                          <div class="bar-time-box">
+                              <span class="current">00:00</span>
+                              <span> / </span>
+                              <span class="duration">00:00</span>
+                          </div>
+                          <div class="bar-pin"></div>
+                      </div>
+                  </div>
+                  <div class="bar-buffer"></div>
+              </div>
+          </div>
+          <div class="video-control-nav-part">
+              <div class="share-btn video-inov-btn"></div>
+              <div class="fullscreen-btn video-inov-btn"></div>
+          </div>
+      </div>
+      <video class="video-element" id="video-element" poster="<?php echo esc_url($poster_img_url[0]); ?>">
+              <source src="<?php echo esc_url($mp4_url); ?>" type="video/mp4">
+          </video>
+  </div>
+      <?php
+      return ob_get_clean();
+  }
+}
+
+/**new resource center **/
+
+// Custom function to limit excerpt length
+function custom_excerpt_max_charlength($charlength) {
+    $excerpt = get_the_excerpt();
+    $charlength++;
+
+    if (mb_strlen($excerpt) > $charlength) {
+        $subex = mb_substr($excerpt, 0, $charlength - 5);
+        $exwords = explode(' ', $subex);
+        $excut = - (mb_strlen($exwords[count($exwords) - 1]));
+        if ($excut < 0) {
+            return mb_substr($subex, 0, $excut) . '...';
+        } else {
+            return $subex . '...';
+        }
+    } else {
+        return $excerpt;
+    }
+}
+function get_custom_taxonomy_details_from_url() {
+    // Check if 'topic' parameter is set in the URL
+    if (isset($_GET['topic']) && !empty($_GET['topic'])) {
+        $topic_slug = sanitize_text_field($_GET['topic']);
+
+        // Get the term by slug in the custom taxonomy
+        $term = get_term_by('slug', $topic_slug, 'resource_categories');
+
+        if ($term === false) {
+            return 'Term not found.';
+        }
+
+        // Prepare the details
+        $details = array(
+            'name' => $term->name,
+            'description' => $term->description
+        );
+
+        return $details;
+    } else {
+        return 'No topic parameter provided.';
+    }
+}
+function findPartialMatchInArrayWithOptionalHyphens($toMatch, $array) {
+    // Sanitize and prepare the regex pattern from the toMatch string
+    $sanitizedToMatch = str_replace('-', '', $toMatch);
+    $patternParts = array_map(function($char) {
+        return preg_quote($char, '/') . '-?';
+    }, str_split($sanitizedToMatch));
+    $pattern = '/' . implode('', $patternParts) . '/i';
+
+    // Search for a partial match in the array
+    foreach ($array as $item) {
+        if (preg_match($pattern, str_replace('-', '', $item))) {
+            return true; // A matching item was found
+        }
+    }
+
+    return false; // No match found
+}
+
+
+function resource_ajax_pagination() {
+  $paged = $_POST['page'];
+  // Get category from URL parameter
+$url_categories = isset($_POST['type']) ? explode('|', $_POST['type']) : [];
+
+if (isset($_POST['topic']) && !empty($_POST['topic'])) {
+    $atts['tag'] = sanitize_text_field($_POST['topic']);
+}
+
+
+// WP_Query arguments
+$args = array(
+    'post_type' => 'resource',
+    'post_status' => 'publish',  // Only select published posts
+    'tag' => $atts['tag'],
+    'posts_per_page' => 20,
+       'orderby' => 'date',        // Order by post date
+    'order' => 'DESC' 
+);
+
+// Filter by category if set in URL
+if (!empty($url_categories)) {
+    $args['tax_query'] = array(
+        array(
+            'taxonomy' => 'resource_categories',
+            'field' => 'slug',
+            'terms' => $url_categories
+        )
+    );
+}
+
+if (isset($_POST['find']) && !empty($_POST['find'])) {
+    $args['s'] = sanitize_text_field($_POST['find']);
+    $args['posts_per_page']= -1;
+
+}
+
+$paged = (get_query_var('paged')) ? get_query_var('paged') : 1;
+$args['paged'] = $paged;
+
+// The Query
+$query = new WP_Query($args);
+// The Loop
+$post_counter = 0;
+if ($query->have_posts()) {
+$output .='<div class="row blog-recent columns-3" data-style="list_featured_first_row" data-color-scheme="light" data-remove-post-date="" data-remove-post-author="" data-remove-post-comment-number="" data-remove-post-nectar-love="">';
+
+    while ($query->have_posts()) {
+        $query->the_post();
+       $terms = get_the_terms(get_the_ID(), 'resource_categories');
+
+if ($terms && !is_wp_error($terms)) {
+    // Define your predefined set of strings
+   $predefined_list = array("overviews","blog", "infographic", "infographics","podcast","podcasts", "product", "press release", "success story", "white paper","white papers","whitepaper","whitepapers", "video","videos","overviews","overview","webinars","webinar");
+
+    // Variable to store the matched term
+    $matched_term = '';
+
+    // Loop through each term
+    foreach ($terms as $term) {
+        $term_name = strtolower($term->name);
+          if (substr($term_name, -1) === 's') {
+            $term_name = rtrim($term_name, "s");
+        } 
+
+        // Check for special case
+        if ($term_name === 'case studies' || $term_name==='case studie') {
+            $matched_term = 'Case Study';
+            break; // Exit the loop if a match is found
+        }
+        
+        if ($term_name === 'whitepapers' || $term_name === 'whitepaper' || $term_name === 'White Paper' || $term_name==='White Papers') {
+            $matched_term = 'White Paper';
+            break; // Exit the loop if a match is found
+        }
+
+        // Check if the term matches any in the predefined list
+        if (in_array($term_name, $predefined_list)) {
+            $matched_term = ucwords($term_name);
+            break; // Exit the loop if a match is found
+        }
+    }
+
+    // Output the matched term (if any)
+   
+} 
+       // $cat_name = $terms && !is_wp_error($terms) ? $terms[0]->name : 'Uncategorized';
+        $cat_name =get_post_meta(get_the_ID(), 'content_type', true) ? : $matched_term;
+       
+        $featured_image = get_the_post_thumbnail_url(get_the_ID(), 'full');
+        if($featured_image==""){
+        $featured_image="https://www.inovalon.com/wp-content/uploads/2023/11/PAY-23-2488-Converged-Analytics-Benchmarking-Featured-Image.jpg";
+        }
+     $card_class = 'card';
+    $small_class = 'featured';
+
+        $output .= '<div class="col ' . $card_class . ' span_4 post type-post status-publish format-standard has-post-thumbnail category-uncategorized">';
+        $output .= '<a class="full-post-link" href="' . get_permalink() . '" aria-label="' . get_the_title() . '"></a>';
+        $output .= '<a class='.$small_class.' aria-label="' . get_the_title() . '" href="' . get_permalink() . '">';
+        $output .= '<span class="img-thumbnail"><img width="600" height="403" src="' . esc_url($featured_image) . '" class="attachment-portfolio-thumb size-portfolio-thumb wp-post-image" alt="" decoding="async" title="" ></span></a>';
+        $output .= '<div class="post-header '.$small_class.'">';
+        $output .= '<span class="meta-category"><a class="' . esc_attr(strtolower($cat_name)) . '" href="#">' . esc_html($cat_name) . '</a></span>';
+       
+          $output .= '<h3>' . get_the_title() . '</h3></div>';
+        $output .= '<div class="excerpt">' . custom_excerpt_max_charlength(100) . '</div>';
+      
+        $output .= '</div>';
+        
+        $post_counter++;
+    }
+     $output .= '</div>';
+} else {
+    // No posts found
+    $output .= '<p>No resources found.</p>';
+}
+
+// Restore original Post Data
+wp_reset_postdata();
+
+$output .= '</div></div>';
+
+echo $output;
+
+wp_die(); 
+}
+add_action('wp_ajax_nopriv_resource_ajax_pagination', 'resource_ajax_pagination');
+add_action('wp_ajax_resource_ajax_pagination', 'resource_ajax_pagination');
+
+
+
+function custom_resources_shortcode($atts) {
+    // Shortcode attributes
+    $atts = shortcode_atts(array(
+        'tag' => '',
+        'title' => '',
+        'description' => '',
+        'link' => '#'
+    ), $atts, 'custom_resources');
+
+    // Start output
+    $output = '<div class="row_col_wrap_12 col span_12" style="padding-left:2%;margin-top:50px">
+    <div class="vc_col-sm-12"><div class="sec-title">
+        <h2 style="color: #4f84c4;text-align: left; border-bottom: 1px dotted rgba(0, 0, 0, 0.2); padding-bottom: 13px;" class="vc_custom_heading vc_custom_1650064799686">'.$atts['title'].'<span><a href="'.$atts['link'].'">View all</a></span></h2>
+        <p style="font-size: 20px;color: #333333;line-height: 32px;text-align: left" class="vc_custom_heading">'.$atts['description'].'</p>
+    </div>';
+
+    // Get type from URL parameter
+    $url_type = isset($_GET['type']) ? sanitize_text_field($_GET['type']) : '';
+
+    if (strtolower($url_type) == 'webinars') {
+        // Display ON24 webinars with the title as category
+        $on24_shortcode = '[on24_webinars category="' . esc_attr($atts['title']) . '"]';
+        $output .= '<div class="on24-webinars-container" data-category="' . esc_attr($atts['title']) . '">' . do_shortcode($on24_shortcode) . '</div>';
+    } else {
+        // Get category from URL parameter
+        $url_categories = isset($_GET['type']) ? explode('|', $_GET['type']) : [];
+
+        if (isset($_GET['topic']) && !empty($_GET['topic'])) {
+            $atts['tag'] = sanitize_text_field($_GET['topic']);
+        }
+
+        // WP_Query arguments
+        $args = array(
+            'post_type' => 'resource',
+            'post_status' => 'publish',  // Only select published posts
+            'tag' => $atts['tag'],
+            'posts_per_page' => 6,
+            'orderby' => 'date',        // Order by post date
+            'order' => 'DESC' 
+        );
+
+        // Filter by category if set in URL
+        if (!empty($url_categories)) {
+            $args['tax_query'] = array(
+                array(
+                    'taxonomy' => 'resource_categories',
+                    'field' => 'slug',
+                    'terms' => $url_categories
+                )
+            );
+        }
+
+        // Check for search parameter in URL and add to query if present
+        if (isset($_GET['find']) && !empty($_GET['find'])) {
+            $args['s'] = sanitize_text_field($_GET['find']);
+            $args['posts_per_page'] = -1;
+        }
+
+        // The Query
+        $query = new WP_Query($args);
+
+        // The Loop
+        $post_counter = 0;
+        if ($query->have_posts()) {
+            $output .= '<div class="row blog-recent columns-3" data-style="list_featured_first_row" data-color-scheme="light" data-remove-post-date="" data-remove-post-author="" data-remove-post-comment-number="" data-remove-post-nectar-love="">';
+
+            while ($query->have_posts()) {
+                $query->the_post();
+                $terms = get_the_terms(get_the_ID(), 'resource_categories');
+               
+if ($terms && !is_wp_error($terms)) {
+    // Define your predefined set of strings
+   $predefined_list = array("overviews","blog", "infographic", "infographics","podcast","podcasts", "product", "press release", "success story", "white paper","white papers","whitepaper","whitepapers", "video","videos","overviews","overview","webinars","webinar");
+
+    // Variable to store the matched term
+    $matched_term = '';
+
+    // Loop through each term
+    foreach ($terms as $term) {
+        $term_name = strtolower($term->name);
+           if (substr($term_name, -1) === 's') {
+            $term_name = rtrim($term_name, "s");
+        } 
+
+        // Check for special case
+        if ($term_name === 'case studies' || $term_name === 'case studie') {
+            $matched_term = 'Case Study';
+            break; // Exit the loop if a match is found
+        }
+        
+          if ($term_name === 'whitepapers' || $term_name === 'whitepaper' || $term_name === 'White Paper' || $term_name==='White Papers') {
+            $matched_term = 'White Paper';
+            break; // Exit the loop if a match is found
+        }
+
+        // Check if the term matches any in the predefined list
+        if (in_array($term_name, $predefined_list)) {
+            $matched_term = ucwords($term_name);
+            break; // Exit the loop if a match is found
+        }
+    }
+
+    // Output the matched term (if any)
+   
+} 
+       // $cat_name = $terms && !is_wp_error($terms) ? $terms[0]->name : 'Uncategorized';
+        $cat_name =get_post_meta(get_the_ID(), 'content_type', true) ? : $matched_term;
+
+                $featured_image = get_the_post_thumbnail_url(get_the_ID(), 'full');
+                if ($featured_image == "") {
+                    $featured_image = "https://www.inovalon.com/wp-content/uploads/2023/11/PAY-23-2488-Converged-Analytics-Benchmarking-Featured-Image.jpg";
+                }
+
+                $card_class = $post_counter < 3 ? ' card' : 'card';
+                $small_class = $post_counter < 3 ? ' featured' : 'featured';
+                $output .= '<div class="col ' . $card_class . ' span_4 post type-post status-publish format-standard has-post-thumbnail category-uncategorized">';
+                $output .= '<a class="full-post-link" href="' . get_permalink() . '" aria-label="' . get_the_title() . '"></a>';
+                $output .= '<a class='.$small_class.' aria-label="' . get_the_title() . '" href="' . get_permalink() . '">';
+                $output .= '<span class="img-thumbnail"><img width="600" height="403" src="' . esc_url($featured_image) . '" class="attachment-portfolio-thumb size-portfolio-thumb wp-post-image" alt="" decoding="async" title="" ></span></a>';
+                $output .= '<div class="post-header '.$small_class.'">';
+                $output .= '<span class="meta-category"><a class="' . esc_attr(strtolower($cat_name)) . '" href="#">' . esc_html($cat_name) . '</a></span>';
+
+                $output .= $post_counter < 3 ? '<h3>' . get_the_title() . '</h3></div>' : '<h3>' . get_the_title() . '</h3></div>';
+              //  $output .= $post_counter < 3 ? '<div class="excerpt">' . custom_excerpt_max_charlength(100) . '</div>' : '';
+
+                $output .= '</div>';
+
+                $post_counter++;
+            }
+            $output .= '</div>';
+        } else {
+            // No posts found
+            $output .= '<p>No resources found.</p>';
+        }
+
+        // Restore original Post Data
+        wp_reset_postdata();
+    }
+
+    $output .= '</div></div>';
+
+    return $output;
+}
+    
+add_shortcode('custom_resources', 'custom_resources_shortcode');
+
+function custom_resources_shortcode_new($atts) {
+    // Shortcode attributes
+     $atts = shortcode_atts(array(
+        'tag' => '',
+        'title' => '',
+        'description' => '',
+        'link' => '#'
+    ), $atts, 'custom_resources');
+
+    // Start output
+    $output = '<div class="row_col_wrap_12 col span_12" style="padding-left:2%;margin-top:50px">
+    <div class="vc_col-sm-12"><div class="sec-title">
+        <h2 style="color: #4f84c4;text-align: left; border-bottom: 1px dotted rgba(0, 0, 0, 0.2); padding-bottom: 13px;" class="vc_custom_heading">'.$atts['title'].'<span><a href="'.$atts['link'].'">View all</a></span></h2>
+        <p style="font-size: 20px;color: #333333;line-height: 32px;text-align: left" class="vc_custom_heading">'.$atts['description'].'</p>
+    </div>';
+
+    // Get type from URL parameter
+    $url_type = isset($_GET['type']) ? sanitize_text_field($_GET['type']) : '';
+
+    if (strtolower($url_type) == 'webinars') {
+        // Display ON24 webinars with the title as category
+        $on24_shortcode = '[on24_webinars category="' . esc_attr($atts['title']) . '"]';
+        $output .= '<div class="on24-webinars-container" data-category="' . esc_attr($atts['title']) . '">' . do_shortcode($on24_shortcode) . '</div>';
+    } else {
+        // WP_Query arguments
+        $args = array(
+            'post_type' => 'resource',
+            'post_status' => 'publish',
+            'posts_per_page' => 6,
+            'orderby' => 'date',
+            'order' => 'DESC'
+        );
+
+        // Start building meta query
+        $meta_query = array('relation' => 'AND');
+
+        // Handle URL parameters for filtering
+        if (isset($_GET['type']) && !empty($_GET['type'])) {
+            $url_categories = explode('|', sanitize_text_field($_GET['type']));
+            $meta_query[] = array(
+                'key' => 'content_type',
+                'value' => array_map(function($cat) { 
+                    return str_replace('-', ' ', $cat); 
+                }, $url_categories),
+                'compare' => 'IN'
+            );
+        }
+
+        // Add predefined_topics filter if tag is set in shortcode
+        if (!empty($atts['tag'])) {
+            $meta_query[] = array(
+                'key' => 'predefined_topics',
+                'value' => $atts['tag'],
+                'compare' => 'LIKE'
+            );
+        }
+
+        // Add predefined_topics filter if topic is set in URL
+        if (isset($_GET['topic']) && !empty($_GET['topic'])) {
+            $topic = str_replace('-', ' ', sanitize_text_field($_GET['topic']));
+            $meta_query[] = array(
+                'key' => 'predefined_topics',
+                'value' => $topic,
+                'compare' => 'LIKE'
+            );
+        }
+
+        // Add meta_query to args if we have any conditions
+        if (count($meta_query) > 1) {
+            $args['meta_query'] = $meta_query;
+        }
+
+        // Add search parameter if present
+        if (isset($_GET['find']) && !empty($_GET['find'])) {
+            $args['s'] = sanitize_text_field($_GET['find']);
+            $args['posts_per_page'] = -1;
+        }
+
+        // Debug: Print the query arguments
+        // error_log('Query Args: ' . print_r($args, true));
+
+        // The Query
+        $query = new WP_Query($args);
+
+        // Debug: Print the query SQL
+        // error_log('Last Query: ' . $query->request);
+
+        // The Loop
+        $post_counter = 0;
+        if ($query->have_posts()) {
+            $output .= '<div class="row blog-recent columns-3" data-style="list_featured_first_row" data-color-scheme="light" data-remove-post-date="" data-remove-post-author="" data-remove-post-comment-number="" data-remove-post-nectar-love="">';
+
+            while ($query->have_posts()) {
+                $query->the_post();
+                
+                // Get content type from meta
+                $content_type = get_post_meta(get_the_ID(), 'content_type', true);
+                if (empty($content_type)) {
+                    $content_type = 'Uncategorized';
+                }
+                
+                $featured_image = get_the_post_thumbnail_url(get_the_ID(), 'full');
+                if (empty($featured_image)) {
+                    $featured_image = "https://www.inovalon.com/wp-content/uploads/2024/04/thumb-1.jpg";
+                }
+
+                $icon = strtolower($content_type);
+                $icon = str_replace(' ', '-', $icon);
+                $icon_img = get_stylesheet_directory_uri().'/img/'.$icon.'.png';
+
+                $card_class = $post_counter < 3 ? ' card' : 'card';
+                $small_class = $post_counter < 3 ? ' featured' : 'featured';
+
+                $output .= '<div class="col ' . $card_class . ' span_4 post type-post status-publish format-standard has-post-thumbnail category-uncategorized">';
+                $output .= '<a class="full-post-link" href="' . get_permalink() . '" aria-label="' . get_the_title() . '"></a>';
+                $output .= '<a class='.$small_class.' aria-label="' . get_the_title() . '" href="' . get_permalink() . '">';
+                $output .= '<div class="add-layer"><div class="res-icon"><img src="'.$icon_img.'"></div></div>';
+                $output .= '<span class="img-thumbnail"><img width="600" height="403" src="' . esc_url($featured_image) . '" class="attachment-portfolio-thumb size-portfolio-thumb wp-post-image" alt="" decoding="async" title="" ></span></a>';
+                $output .= '<div class="post-header '.$small_class.'">';
+                $output .= '<span class="meta-category"><a class="' . esc_attr(strtolower($content_type)) . '" href="#">' . esc_html($content_type) . '</a></span>';
+                $output .= $post_counter < 3 ? '<h3>' . get_the_title() . '</h3></div>' : '<h3>' . get_the_title() . '</h3></div>';
+                $output .= '</div>';
+
+                $post_counter++;
+            }
+            $output .= '</div>';
+        } else {
+            // No posts found
+            $output .= '<p>No resources found.</p>';
+        }
+
+        // Restore original Post Data
+        wp_reset_postdata();
+    }
+
+    $output .= '</div></div>';
+
+    return $output;
+}
+    
+add_shortcode('custom_resources_new', 'custom_resources_shortcode_new');
+
+
+
+class inov_2024_nav extends Walker_Nav_Menu {
+
+    // Start the list before the elements are added.
+    function start_lvl( &$output, $depth = 0, $args = null ) {
+        $indent = str_repeat("\t", $depth);
+        $submenu = ($depth > 0) ? ' sub-menu' : '';
+        $output .= "\n$indent<ul class=\"sub-menu$submenu depth_$depth\">\n";
+    }
+
+    // Start the element output.
+    function start_el( &$output, $item, $depth = 0, $args = null, $id = 0 ) {
+        $indent = ( $depth ) ? str_repeat( "\t", $depth ) : '';
+
+        $classes = empty( $item->classes ) ? array() : (array) $item->classes;
+        
+        // Add class names based on your structure
+        $class_names = join( ' ', apply_filters( 'nav_menu_css_class', array_filter( $classes ), $item, $args ) );
+        $class_names = ' class="' . esc_attr( $class_names ) . '"';
+
+        $output .= $indent . '<li id="menu-item-'. $item->ID . '"' . $class_names .'>';
+
+        $atts = array();
+        $atts['title']  = ! empty( $item->attr_title ) ? $item->attr_title : '';
+        $atts['target'] = ! empty( $item->target )     ? $item->target     : '';
+        $atts['rel']    = ! empty( $item->xfn )        ? $item->xfn        : '';
+        $atts['href']   = ! empty( $item->url )        ? $item->url        : '';
+
+        $attributes = '';
+        foreach ( $atts as $attr => $value ) {
+            if ( ! empty( $value ) ) {
+                $value = ( 'href' === $attr ) ? esc_url( $value ) : esc_attr( $value );
+                $attributes .= ' ' . $attr . '="' . $value . '"';
+            }
+        }
+
+        $title = apply_filters( 'the_title', $item->title, $item->ID );
+        $description = !empty($item->description) ? $item->description : '';
+
+
+        // Modify the item output to match your structure
+        $menu_item_options = maybe_unserialize( get_post_meta( $item->ID, 'nectar_menu_options', true ) );
+             
+        $image="";
+        $icon="";
+        if($menu_item_options){
+            $image = $menu_item_options['menu_item_link_bg_img_custom']['url'];
+$image = str_replace('https:', '', $image);
+            $icon = '<div class="icon" style="background:'.$menu_item_options['menu_item_link_color_overlay'].'"><img src="'.$image.'" alt="'.$second_item->title.'"></div>';
+             }
+             
+        $item_output = $args->before;
+        $item_output .= '<a'. $attributes .'>';
+        
+        if($image){
+            $item_output.='<div class="nectar-ext-menu-item style-default">
+            <div class="image-layer-outer hover-zoom-in">
+               <div class="image-layer" style="background-image:url('.$image.')"></div>
+               <div class="color-overlay"></div>
+            </div>
+            <div class="inner-content"><span class="title inherit-h4"><span class="menu-title-text">'.$title.'</span></span><span class="menu-item-desc">'.$description.'</span></div>
+         </div>';
+        }
+        if (in_array('sub-arrow', $item->classes)) {
+            $svg = '<svg id="Layer_1" style="enable-background:new 0 0 64 64;float: right;height: 32px;margin-top: -6px;" version="1.1" viewBox="0 0 64 64" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+            <style type="text/css">
+               .st0{fill:#134563;}
+            </style>
+            <g>
+               <g id="Icon-Chevron-Left" transform="translate(237.000000, 335.000000)">
+                  <polyline class="st0" id="Fill-35" points="-210.9,-289 -212.9,-291 -201.1,-302.7 -212.9,-314.4 -210.9,-316.4 -197.1,-302.7      -210.9,-289    "></polyline>
+               </g>
+            </g>
+         </svg>';
+        }else{
+            $svg='';
+        }
+
+   
+
+        if ( $depth > 0 ) {
+            // Submenu items structure
+            if(!$image){
+            $item_output .= $args->link_before . $title .$svg. $args->link_after;
+            }
+            
+        } else {
+            // Main menu items structure
+            $item_output .= '<span class="menu-title-text">' . $title . '</span>';
+        }
+        
+        $item_output .= '</a>';
+        $item_output .= $args->after;
+
+        $output .= apply_filters( 'walker_nav_menu_start_el', $item_output, $item, $depth, $args );
+    }
+
+    // End the element output.
+    function end_el( &$output, $item, $depth = 0, $args = null ) {
+        $output .= "</li>\n";
+    }
+
+    // Ends the list of after the elements are added.
+    function end_lvl( &$output, $depth = 0, $args = null ) {
+        $indent = str_repeat("\t", $depth);
+        $output .= "$indent</ul>\n";
+    }
+}
+
+function get_custom_post_id_by_slug($slug) {
+    $args = array(
+        'name' => $slug,
+        'post_type' => 'salient_g_sections', // Custom post type
+        'posts_per_page' => 1,
+        'post_status' => 'publish',
+    );
+
+    $posts = get_posts($args);
+
+    if (!empty($posts)) {
+        return $posts[0]->ID;
+    }
+
+    return null;
+}
+
+/**webinars redirect **/
+function redirect_webinar_searches($query) {
+    if (!is_admin() && $query->is_search() && $query->is_main_query()) {
+        $search_term = $query->get('s');
+        if (preg_match('/\bwebinar\b|\bwebinars\b/i', $search_term)) {
+            wp_redirect('https://hub.inovalon.com/wcc/eh/4561502/inovalon-webinars');
+            exit;
+        }
+    }
+}
+add_action('pre_get_posts', 'redirect_webinar_searches');
+
+
+/**Marketo API **/
+function marketo_proxy_request() {
+    // Check for the nonce to secure the request
+    check_ajax_referer( 'marketo_nonce', 'nonce' );
+
+    // Retrieve the Marketo cookie value from the browser's cookies
+    if (isset($_COOKIE['_mkto_trk'])) {
+        $marketo_cookie = sanitize_text_field($_COOKIE['_mkto_trk']);
+    } else {
+        wp_send_json_error('Marketo cookie not found');
+        wp_die();
+    }
+
+    // URL encode the cookie value
+    $encoded_cookie = urlencode($marketo_cookie);
+
+    // Replace these placeholders with your actual Marketo instance and access token
+    $marketo_instance = "https://322-GRX-456.mktorest.com";
+    $auth_token = "484aedfe-2a3f-4b19-a905-3b8a123224c3:ab";
+    $endpoint = "/rest/v1/leads.json";
+    $filter_type_and_values = "&filterType=cookies&filterValues={$encoded_cookie}&fields=cookies,email";
+
+    // Build the request URL
+    $request_url = $marketo_instance . $endpoint . "?access_token=" . $auth_token . $filter_type_and_values;
+
+    // Make the request to the Marketo API
+    $response = wp_remote_get($request_url);
+
+    // Check if the request was successful
+    if ( is_wp_error( $response ) ) {
+        wp_send_json_error( 'Error retrieving data from Marketo' );
+    } else {
+        $body = wp_remote_retrieve_body( $response );
+        wp_send_json_success( json_decode( $body ) );
+    }
+
+    wp_die(); // This is required to terminate immediately and return a proper response
+}
+add_action( 'wp_ajax_marketo_proxy', 'marketo_proxy_request' );
+add_action( 'wp_ajax_nopriv_marketo_proxy', 'marketo_proxy_request' );
+
+/** Author Content Loop */
+function search_by_author() {
+    // Check for the search query
+    if (isset($_POST['query'])) {
+        $search_query = sanitize_text_field($_POST['query']);
+      
+        // Perform a search based on the author meta field or other criteria
+        $args = array(
+            'post_type' => $_POST['post_type'], // Adjust post types as necessary
+            'posts_per_page' => -1, // Adjust as necessary
+            's' => $search_query,
+        );
+
+        if(!empty($_POST['author'])){
+            $author_id = sanitize_text_field($_POST['author']);
+            $args['meta_query'] = array(
+                array(
+                    'key' => 'inov_author', // Adjust this meta key to match your author's field
+                    'value' => $author_id,
+                    'compare' => 'LIKE',
+                ),
+            );
+        }
+
+        if ( !empty( $_POST['topic'] ) ) {
+            // Add tax query for filtering posts by the tag sent in $_POST['topic']
+            $args['tax_query'] = array(
+                array(
+                    'taxonomy' => 'post_tag',    // Taxonomy for tags
+                    'field'    => 'slug',        // Using the tag slug
+                    'terms'    => sanitize_text_field( $_POST['topic'] ), // Tag slug sent via POST
+                ),
+            );
+        }
+      
+        $query = new WP_Query($args);
+
+        if ($query->have_posts()) {
+        
+           
+        
+                // Loop through posts
+                while ($query->have_posts()) {
+                    $query->the_post();
+                    $featured_image = get_the_post_thumbnail_url(get_the_ID(), 'full');
+                    if($featured_image==""){
+                    $featured_image="https://www.inovalon.com/wp-content/uploads/2024/04/thumb-1.jpg";
+                    }
+                 //   $featured_image="https://www.inovalon.com/wp-content/uploads/2024/04/thumb-1.jpg";
+                    // Get the business unit meta value
+                    $business_unit = get_post_meta(get_the_ID(), 'business_unit', true);
+                    $excerpt = get_the_excerpt();
+                    $external_link  = get_post_meta(get_the_ID(),'link_to_publication',true);
+                  
+                    if (empty($excerpt) || str_contains($excerpt, 'vc_row')) {
+                        $excerpt =get_post_meta(get_the_ID(), '_yoast_wpseo_metadesc', true);
+                        $excerpt = str_replace(' Learn more.','',$excerpt );
+                        $excerpt = str_replace('Blog: ','',$excerpt );
+                        $excerpt = str_replace('Success story: ','',$excerpt );
+                      
+                    }
+                   
+                    $terms = get_the_terms(get_the_ID(), 'resource_categories');
+    
+    
+                    if ($terms && !is_wp_error($terms)) {
+                        // Define your predefined set of strings
+                        $predefined_list = array("overviews","blog", "infographic", "infographics","podcast","podcasts", "product", "press release", "success story", "white paper","white papers","whitepaper","whitepapers", "video","videos");
+                        // Variable to store the matched term
+                        $matched_term = '';
+                    
+                        // Loop through each term
+                        foreach ($terms as $term) {
+                            $term_name = strtolower($term->name);
+                    
+                            if (substr($term_name, -1) === 's') {
+                                $term_name = rtrim($term_name, "s");
+                            } 
+                            
+                    
+                            // Check for special case
+                            if ($term_name === 'case studies' || $term_name === 'case studie') {
+                                $matched_term = 'Case Study';
+                                break; // Exit the loop if a match is found
+                            }
+                    
+                            if ($term_name === 'whitepapers' || $term_name === 'whitepaper' || $term_name === 'White Paper' || $term_name==='White Papers') {
+                                $matched_term = 'White Paper';
+                                break; // Exit the loop if a match is found
+                            }
+                    
+                            
+                    
+                            // Check if the term matches any in the predefined list
+                            if (in_array($term_name, $predefined_list)) {
+                                $matched_term = ucwords($term_name);
+                                break; // Exit the loop if a match is found
+                            }
+                        }
+                    
+                        // Output the matched term (if any)
+                       
+                    } 
+                  
+                   
+                    $content_type = $matched_term;
+        
+                    if (strtolower(get_post_type( get_the_ID() )) == "publications"){
+                        $content_type = "publications";
+                        $tags = wp_get_post_tags(get_the_ID());
+                        $tag_names = [];
+                        $tag_spans =[];
+                        foreach ($tags as $tag) {
+                            $tag_names[] = strtolower($tag->name);
+                            $tag_spans[] = '<span class="business-unit">' . ucfirst($tag->name) . '</span>';
+                        }
+                        $business_unit = implode(', ', $tag_names);
+        
+                    }
+        
+                    if (strtolower(get_post_type( get_the_ID() )) == "blogpost"){
+                        $content_type = "blog";
+        
+                    }
+                    if (strtolower(get_post_type( get_the_ID() )) == "newsrelease"){
+                        $content_type = "news";
+        
+                    }
+    
+                    $pres_type = get_post_meta(get_the_ID(), 'extra_categories', true);
+                    if($pres_type=="Presentation"){
+                        $pres_type = "poster-presentation";
+                        $content_type = $pres_type;
+                        $pres_type = str_replace(' ','-', ucwords($pres_type));
+                    }
+                    if($_POST['view']=="research"){
+                        $pres_type = get_post_meta(get_the_ID(), 'extra_categories', true);
+                        $all_authors = get_field('all_authors',get_the_ID());
+                        $names_array = explode(',' , $all_authors);
+                        $authors_span='';
+                        $permalink='';
+                    
+                        $post_type = 'authors';
+        
+        
+                        foreach( $names_array as $key => $name ){
+                        $last_only = explode(" ",ltrim($name));
+                      
+                        $permalink = search_custom_post_type($last_only[0], $post_type);
+                      
+                        if ($permalink !="") {
+                            $authors_span .=  "<span><a class='author_link' href='{$permalink}'>{$name}</a></span>";
+                          } else {
+                            $authors_span .=  "<span>{$name}</span>";
+                          }
+                   
+                        $authors_span .= ( ( $key < ( count( $names_array ) -1 ) ) ? ', ':'' );
+            
+                        }
+                        if($all_authors){
+                        $authors = '<div class="authors">'.$authors_span.'</div>';
+                        }
+    
+                        if($excerpt ==""){
+                            $excerpt = get_post_meta( get_the_ID(), 'full_summary', true );
+                           }
+                        
+                    }
+        
+                    echo '<div class="post-card" data-topic="'.strtolower($business_unit).'" data-type="'.str_replace(' ','-', strtolower($content_type)).'" style="background-color: ' . esc_attr($atts['bg_color']) . '; ">';
+        
+                    // Display the featured image
+                    if (has_post_thumbnail()) {
+                        echo '<div class="post-image" style="width: 100%; height: 180px; overflow: hidden;">';
+                        echo '<img src="'.$featured_image.'" style="width: 100%; height: 100%; object-fit: cover;" >';
+                        if($_POST['view']=="research"){
+                            $auth_images ='';
+                            $inov_auths =  maybe_unserialize( get_post_meta( get_the_ID(), 'inov_author', true ) );
+                           // var_dump(is_array($inov_auths));
+                            if(!empty($inov_auths[0])){
+                                foreach ($inov_auths as $auth_id){
+                                    $fimage = get_the_post_thumbnail_url($auth_id, 'full');
+                                    if($fimage){
+                                        $auth_images .= '<div class="nectar-circle-images__image nectar-circle-images__item loaded" style="z-index: 100; background-image: url('.$fimage.');"><a href="'.get_the_permalink($auth_id).'" title="'.get_the_title($auth_id).'"></a></div>';
+                                        }else{
+                                            $fimage = 'https://www.inovalon.com/wp-content/uploads/2024/09/user_no_image.png';
+                                            $auth_images .= '<div class="nectar-circle-images__image nectar-circle-images__item loaded" style="z-index: 100; background-image: url('.$fimage.');"><a href="'.get_the_permalink($auth_id).'" title="'.get_the_title($auth_id).'" ></a></div>';
+                
+                                        }
+                                }
+                                $experts = '<div class="inov-authors"><span>Inovalon Experts</span>
+                                            <div class="nectar-circle-images__inner">'.$auth_images.'</div></div>';
+                            }else{
+                                $experts ='';
+                            }
+                        
+                            echo '<div class="extra-inf"><div class="pub-date">Published <span>'.get_the_date('F j, Y').'</span></div>';
+                            echo '<div class="poster-type"><span>'.str_replace('-',' ', ucwords($pres_type)).'</span></div>';
+                            echo $experts;
+                            echo '</div>';
+            
+                            }
+                        echo '</div>';
+                    } else {
+                        echo '<div class="post-image" style="width: 100%; height: 180px; background: #f0f0f0; display: flex; align-items: center; justify-content: center;">';
+                        if($_POST['view']=="research"){
+                            $auth_images ='';
+                            $inov_auths =  maybe_unserialize( get_post_meta( get_the_ID(), 'inov_author', true ) );
+                           // var_dump(is_array($inov_auths));
+                            if(!empty($inov_auths[0])){
+                                foreach ($inov_auths as $auth_id){
+                                    $fimage = get_the_post_thumbnail_url($auth_id, 'full');
+                                    if($fimage){
+                                        $auth_images .= '<div class="nectar-circle-images__image nectar-circle-images__item loaded" style="z-index: 100; background-image: url('.$fimage.');"><a href="'.get_the_permalink($auth_id).'" title="'.get_the_title($auth_id).'"></a></div>';
+                                        }else{
+                                            $fimage = 'https://www.inovalon.com/wp-content/uploads/2024/09/user_no_image.png';
+                                            $auth_images .= '<div class="nectar-circle-images__image nectar-circle-images__item loaded" style="z-index: 100; background-image: url('.$fimage.');"><a href="'.get_the_permalink($auth_id).'" title="'.get_the_title($auth_id).'" ></a></div>';
+                
+                                        }
+                                }
+                                $experts = '<div class="inov-authors"><span>Inovalon Experts</span>
+                                            <div class="nectar-circle-images__inner">'.$auth_images.'</div></div>';
+                            }else{
+                                $experts ='';
+                            }
+                        
+                            echo '<div class="extra-inf"><div class="pub-date">Published <span>'.get_the_date('F j, Y').'</span></div>';
+                            echo '<div class="poster-type"><span>'.str_replace('-',' ', ucwords($pres_type)).'</span></div>';
+                            echo $experts;
+                            echo '</div>';
+            
+                            }
+                        echo '<img src="https://www.inovalon.com/wp-content/uploads/2024/04/thumb-1.jpg" alt="Placeholder">'; 
+                        echo '</div>';
+                    }
+        
+                    // Post details
+                    echo '<div class="post-content-holder" style="padding: 16px;">';
+        
+                    // Display the business unit
+                    if (!empty($business_unit)) {
+                        if($_POST['view']=="research"){
+                        echo  implode(' ',$tag_spans);
+                        }else{
+                            if (strtolower(get_post_type( get_the_ID() )) == "publications"){
+                                echo '<span class="business-unit">Research & Publications</span>';
+                            }else{
+                                echo '<span class="business-unit">'.$business_unit.'</span>';
+                            }
+                       
+                        }
+                    }
+                    
+                    // Display the title
+                    $post_title ='<h3><a href="' . get_permalink() . '" style="text-decoration: none; color: #333;">' . get_the_title() . '</a></h3>';
+                    
+                    if($external_link != ''){
+                        $post_title = '<h3><a href="' . $external_link . '" style="text-decoration: none; color: #333;" target="_blank">' . get_the_title() . '</a></h3>';
+                    }
+                    if($external_link == '#'){
+                        $post_title = '<h3 style="font-size:17px; line-height:24px">' . get_the_title() . '</h3>';
+                    }
+                    echo $post_title;
+                   
+                    echo $authors;
+        
+                    // Display the excerpt
+                    echo '<div class="meta_excerpt"><p>' .$excerpt. '</p></div>';
+        
+                    // Read More link
+                    $post_link='<a href="' . get_permalink() . '">Read More &rarr;</a>';
+                    if($external_link != ''){
+                    $post_link = '<a href="' . $external_link . '" target="_blank">Read More &rarr;</a>';
+                    }
+    
+                    if($external_link == '#'){
+                        $post_link = '';
+                    }
+                    echo $post_link;
+        
+                    echo '</div>'; // .post-content
+                    echo '</div>'; // .post-card
+        
+            
+        }
+     } else {
+            echo 'No posts found.';
+        }
+
+        wp_reset_postdata();
+    }
+
+    wp_die(); // Necessary to properly end the AJAX request
+}
+
+add_action('wp_ajax_search_by_author', 'search_by_author');
+add_action('wp_ajax_nopriv_search_by_author', 'search_by_author');
+
+// Add this to your functions.php or a custom plugin
+function author_load_more_posts() {
+    
+    $paged = isset($_POST['paged']) ? intval($_POST['paged']) : 1;
+    $post_type = isset($_POST['post_type']) ? sanitize_text_field($_POST['post_type']) : 'any';
+    $posts_per_page = 6; // Set how many posts to load per request
+
+    // Prepare the query arguments
+    $args = array(
+        'post_type'      => $post_type,
+        'posts_per_page' => $posts_per_page,
+        'paged'          => $paged,
+        'post_status' => 'publish'
+    );
+
+    if (!empty($_POST['author_id'])) {
+        // Prepare the author ID to search within the serialized array
+      $args['meta_query'] = array(
+        array(
+            'key' => 'inov_author', // Adjust this meta key to match your author's field
+            'value' => '"' . esc_attr($_POST['author_id']) . '"',
+            'compare' => 'LIKE',
+        ),
+    );
+  }
+
+ 
+
+
+
+    if (!empty($_POST['tags'])) {
+        $args['tag'] = sanitize_text_field($_POST['tags']);
+    }
+    if(isset($_POST['topic']) && $_POST['topic']!="" ){
+        $args['tax_query'][] = array(
+            'taxonomy' => 'post_tag',
+            'field' => 'slug',
+            'terms' => $_POST['topic'],
+        );
+
+    }
+    
+  
+    $query = new WP_Query($args);
+
+    // Check if there are posts
+    if ($query->have_posts()) {
+        while ($query->have_posts()) {
+                $query->the_post();
+                $featured_image = get_the_post_thumbnail_url(get_the_ID(), 'full');
+                if($featured_image==""){
+                $featured_image="https://www.inovalon.com/wp-content/uploads/2024/04/thumb-1.jpg";
+                }
+             //   $featured_image="https://www.inovalon.com/wp-content/uploads/2024/04/thumb-1.jpg";
+                // Get the business unit meta value
+                $business_unit = get_post_meta(get_the_ID(), 'business_unit', true);
+                $excerpt = get_the_excerpt();
+                $external_link  = get_post_meta(get_the_ID(),'link_to_publication',true);
+              
+                if (empty($excerpt) || str_contains($excerpt, 'vc_row')) {
+                    $excerpt =get_post_meta(get_the_ID(), '_yoast_wpseo_metadesc', true);
+                    $excerpt = str_replace(' Learn more.','',$excerpt );
+                    $excerpt = str_replace('Blog: ','',$excerpt );
+                    $excerpt = str_replace('Success story: ','',$excerpt );
+                  
+                }
+               
+                $terms = get_the_terms(get_the_ID(), 'resource_categories');
+
+
+                if ($terms && !is_wp_error($terms)) {
+                    // Define your predefined set of strings
+                    $predefined_list = array("overviews","blog", "infographic", "infographics","podcast","podcasts", "product", "press release", "success story", "white paper","white papers","whitepaper","whitepapers", "video","videos");
+                    // Variable to store the matched term
+                    $matched_term = '';
+                
+                    // Loop through each term
+                    foreach ($terms as $term) {
+                        $term_name = strtolower($term->name);
+                
+                        if (substr($term_name, -1) === 's') {
+                            $term_name = rtrim($term_name, "s");
+                        } 
+                        
+                
+                        // Check for special case
+                        if ($term_name === 'case studies' || $term_name === 'case studie') {
+                            $matched_term = 'Case Study';
+                            break; // Exit the loop if a match is found
+                        }
+                
+                        if ($term_name === 'whitepapers' || $term_name === 'whitepaper' || $term_name === 'White Paper' || $term_name==='White Papers') {
+                            $matched_term = 'White Paper';
+                            break; // Exit the loop if a match is found
+                        }
+                
+                        
+                
+                        // Check if the term matches any in the predefined list
+                        if (in_array($term_name, $predefined_list)) {
+                            $matched_term = ucwords($term_name);
+                            break; // Exit the loop if a match is found
+                        }
+                    }
+                
+                    // Output the matched term (if any)
+                   
+                } 
+              
+               
+                $content_type = $matched_term;
+    
+                if (strtolower(get_post_type( get_the_ID() )) == "publications" || strtolower(get_post_type( get_the_ID() )) == "resource"){
+                    $content_type = "publications";
+                    $tags = wp_get_post_tags(get_the_ID());
+                    $tag_names = [];
+                    $tag_spans =[];
+                    foreach ($tags as $tag) {
+                        $tag_names[] = strtolower($tag->name);
+                        $tag_spans[] = '<span class="business-unit">' . ucfirst($tag->name) . '</span>';
+                    }
+                    $business_unit = implode(', ', $tag_names);
+    
+                }
+    
+                if (strtolower(get_post_type( get_the_ID() )) == "blogpost"){
+                    $content_type = "blog";
+    
+                }
+                if (strtolower(get_post_type( get_the_ID() )) == "newsrelease"){
+                    $content_type = "news";
+    
+                }
+
+                $pres_type = get_post_meta(get_the_ID(), 'extra_categories', true);
+                if($pres_type=="Presentation"){
+                    $pres_type = "poster-presentation";
+                    $content_type = $pres_type;
+                    $pres_type = str_replace(' ','-', ucwords($pres_type));
+                }
+                if($_POST['view']=="research"){
+                    $pres_type = get_post_meta(get_the_ID(), 'extra_categories', true);
+                    $all_authors = get_field('all_authors',get_the_ID());
+                    $names_array = explode(',' , $all_authors);
+                    $authors_span='';
+                    $permalink='';
+                
+                    $post_type = 'authors';
+    
+    
+                    foreach( $names_array as $key => $name ){
+                    $last_only = explode(" ",ltrim($name));
+                  
+                    $permalink = search_custom_post_type($last_only[0], $post_type);
+                  
+                    if ($permalink !="") {
+                        $authors_span .=  "<span><a class='author_link' href='{$permalink}'>{$name}</a></span>";
+                      } else {
+                        $authors_span .=  "<span>{$name}</span>";
+                      }
+               
+                    $authors_span .= ( ( $key < ( count( $names_array ) -1 ) ) ? ', ':'' );
+        
+                    }
+                    if($all_authors){
+                    $authors = '<div class="authors">'.$authors_span.'</div>';
+                    }
+
+                    if($excerpt ==""){
+                        $excerpt = get_post_meta( get_the_ID(), 'full_summary', true );
+                       }
+                    
+                }
+    
+                echo '<div class="post-card" data-topic="'.strtolower($business_unit).'" data-type="'.str_replace(' ','-', strtolower($content_type)).'" style="background-color: ' . esc_attr($atts['bg_color']) . '; ">';
+    
+                // Display the featured image
+                if (has_post_thumbnail()) {
+                    echo '<div class="post-image" style="width: 100%; height: 180px; overflow: hidden;">';
+                    echo '<img src="'.$featured_image.'" style="width: 100%; height: 100%; object-fit: cover;" >';
+                    if($_POST['view']=="research"){
+                        $auth_images ='';
+                        $inov_auths =  maybe_unserialize( get_post_meta( get_the_ID(), 'inov_author', true ) );
+                       // var_dump(is_array($inov_auths));
+                        if(!empty($inov_auths[0])){
+                            foreach ($inov_auths as $auth_id){
+                                $fimage = get_the_post_thumbnail_url($auth_id, 'full');
+                                if($fimage){
+                                    $auth_images .= '<div class="nectar-circle-images__image nectar-circle-images__item loaded" style="z-index: 100; background-image: url('.$fimage.');"><a href="'.get_the_permalink($auth_id).'" title="'.get_the_title($auth_id).'"></a></div>';
+                                    }else{
+                                        $fimage = 'https://www.inovalon.com/wp-content/uploads/2024/09/user_no_image.png';
+                                        $auth_images .= '<div class="nectar-circle-images__image nectar-circle-images__item loaded" style="z-index: 100; background-image: url('.$fimage.');"><a href="'.get_the_permalink($auth_id).'" title="'.get_the_title($auth_id).'" ></a></div>';
+            
+                                    }
+                            }
+                            $experts = '<div class="inov-authors"><span>Inovalon Experts</span>
+                                        <div class="nectar-circle-images__inner">'.$auth_images.'</div></div>';
+                        }else{
+                            $experts ='';
+                        }
+                    
+                        echo '<div class="extra-inf"><div class="pub-date">Published <span>'.get_the_date('F j, Y').'</span></div>';
+                        echo '<div class="poster-type"><span>'.str_replace('-',' ', ucwords($pres_type)).'</span></div>';
+                        echo $experts;
+                        echo '</div>';
+        
+                        }
+                    echo '</div>';
+                } else {
+                    echo '<div class="post-image" style="width: 100%; height: 180px; background: #f0f0f0; display: flex; align-items: center; justify-content: center;">';
+                    if($_POST['view']=="research"){
+                        $auth_images ='';
+                        $inov_auths =  maybe_unserialize( get_post_meta( get_the_ID(), 'inov_author', true ) );
+                       // var_dump(is_array($inov_auths));
+                        if(!empty($inov_auths[0])){
+                            foreach ($inov_auths as $auth_id){
+                                $fimage = get_the_post_thumbnail_url($auth_id, 'full');
+                                if($fimage){
+                                    $auth_images .= '<div class="nectar-circle-images__image nectar-circle-images__item loaded" style="z-index: 100; background-image: url('.$fimage.');"><a href="'.get_the_permalink($auth_id).'" title="'.get_the_title($auth_id).'"></a></div>';
+                                    }else{
+                                        $fimage = 'https://www.inovalon.com/wp-content/uploads/2024/09/user_no_image.png';
+                                        $auth_images .= '<div class="nectar-circle-images__image nectar-circle-images__item loaded" style="z-index: 100; background-image: url('.$fimage.');"><a href="'.get_the_permalink($auth_id).'" title="'.get_the_title($auth_id).'" ></a></div>';
+            
+                                    }
+                            }
+                            $experts = '<div class="inov-authors"><span>Inovalon Experts</span>
+                                        <div class="nectar-circle-images__inner">'.$auth_images.'</div></div>';
+                        }else{
+                            $experts ='';
+                        }
+                    
+                        echo '<div class="extra-inf"><div class="pub-date">Published <span>'.get_the_date('F j, Y').'</span></div>';
+                        echo '<div class="poster-type"><span>'.str_replace('-',' ', ucwords($pres_type)).'</span></div>';
+                        echo $experts;
+                        echo '</div>';
+        
+                        }
+                    echo '<img src="https://www.inovalon.com/wp-content/uploads/2024/04/thumb-1.jpg" alt="Placeholder">'; 
+                    echo '</div>';
+                }
+    
+                // Post details
+                echo '<div class="post-content-holder" style="padding: 16px;">';
+    
+                // Display the business unit
+                  if($_POST['view']=="research"){
+                    echo  implode(' ',$tag_spans);
+                }else{
+                    $business_unit = get_post_meta(get_the_ID(), 'business_unit', true);
+                   
+                    if($business_unit){
+                    echo '<span class="business-unit">'.ucwords($business_unit).'</span>';
+                    }
+                }
+                
+                // Display the title
+                $post_title ='<h3><a href="' . get_permalink() . '" style="text-decoration: none; color: #333;">' . get_the_title() . '</a></h3>';
+                
+                if($external_link != ''){
+                    $post_title = '<h3><a href="' . $external_link . '" style="text-decoration: none; color: #333;" target="_blank">' . get_the_title() . '</a></h3>';
+                }
+                if($external_link == '#'){
+                    $post_title = '<h3 style="font-size:17px; line-height:24px">' . get_the_title() . '</h3>';
+                }
+                echo $post_title;
+               
+                echo $authors;
+    
+                // Display the excerpt
+                echo '<div class="meta_excerpt"><p>' .$excerpt. '</p></div>';
+    
+                // Read More link
+                $post_link='<a href="' . get_permalink() . '">Read More &rarr;</a>';
+                if($external_link != ''){
+                $post_link = '<a href="' . $external_link . '" target="_blank">Read More &rarr;</a>';
+                }
+
+                if($external_link == '#'){
+                    $post_link = '';
+                }
+                echo $post_link;
+    
+                echo '</div>'; // .post-content
+                echo '</div>'; // .post-card
+            }
+            }else {
+               // echo 'No posts found.';
+        
+      
+    } 
+    wp_reset_postdata();
+    wp_die();
+}
+add_action('wp_ajax_author_load_more_posts', 'author_load_more_posts');
+add_action('wp_ajax_nopriv_author_load_more_posts', 'author_load_more_posts');
+
+
+function inovalon_authors_shortcode($atts) {
+    // Default shortcode attributes
+    $atts = shortcode_atts(array(
+        'author_id' => '', // required: specify the author ID to filter
+        'per_page' => '10', // default: 10 posts per page
+        'bg_color' => '#ffffff', // default background color
+        'post_type' => 'any', // default to all post types
+        'tag' => '', // default: no tag filter
+        'view'=>'',
+    ), $atts, 'inovalon_authors');
+
+ 
+
+  
+
+    // Arguments for the WP_Query
+    $args = array(
+        'post_type' => $atts['post_type'] === 'any' ? 'any' : explode('|', $atts['post_type']),
+        'tax_query' => array(),
+        'post_status' => 'publish', // Ensure only published posts are shown
+    );
+
+    if(!empty($atts['per_page'])){
+        $args['posts_per_page'] = $atts['per_page'];
+    }
+
+    // Add meta query only if an author ID is provided
+    if (!empty($atts['author_id'])) {
+          // Prepare the author ID to search within the serialized array
+    $author_id = sanitize_text_field($atts['author_id']);
+    $author_like_query = sprintf(':"%s";', $author_id); // Format to search for serialized ID
+        $args['meta_query'] = array(
+            array(
+                'key' => 'inov_author',
+                'value' => $author_like_query,
+                'compare' => 'LIKE', // Search within serialized meta field
+            ),
+        );
+    }
+
+    // Filter by tags if provided
+    if (!empty($atts['tag'])) {
+        $args['tax_query'][] = array(
+            'taxonomy' => 'post_tag',
+            'field' => 'slug',
+            'terms' => explode('|', $atts['tag']),
+        );
+    }
+    if(isset($_GET['topic'])){
+        $args['tax_query'][] = array(
+            'taxonomy' => 'post_tag',
+            'field' => 'slug',
+            'terms' => $_GET['topic'],
+        );
+
+    }
+
+    // WP_Query
+    $query = new WP_Query($args);
+
+    // Start the output buffer
+    ob_start();
+    $search_section_styles = '
+    /* Container for the filters and search */
+    .filters {
+        display: flex;
+        justify-content: space-between; /* Aligns items on the left and right */
+        gap: 16px;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    
+    /* Container for the select dropdowns */
+    .filter-selects {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+    }
+    
+    /* Dropdown filters (Topics and Resource Type) */
+    .filters select:focus {
+    border-color: #5a67d8!important;
+    color:#5a67d8!important;
+}
+
+    .filters select {
+        padding: 2px 16px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 14px;
+        background-color: #fff;
+        color: #333;
+        appearance: none;
+        outline: none;
+        cursor: pointer;
+        transition: border-color 0.3s;
+        font-weight:600;
+        text-align:center;
+          text-align-last: center;
+    }
+    
+    .filters select option {
+    text-align:left;
+    }
+
+    
+    /* Container for the search input and button */
+    .search-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto; /* Pushes search to the right */
+    }
+    
+    /* Search input */
+    #search-author {
+        padding: 10px 16px;
+        border: 1px solid #ddd;
+        border-radius: 24px;
+        font-size: 14px;
+        color: #333;
+        width: 300px;
+        outline: none;
+        transition: border-color 0.3s;
+    }
+    
+    #search-author:focus {
+        border-color: #1e73be; /* Blue border on focus */
+    }
+    
+    /* Search button */
+    #search-button {
+        border: none;
+        border-radius: 50% !important;
+    padding: 10px;
+    font-size:10px;
+        background-color: #5967d8;
+        color: #fff;
+        cursor: pointer;
+        transition: background-color 0.3s, transform 0.3s;
+        position:absolute;
+        right:6px;
+    }
+    
+    #search-button:hover {
+        background-color: #185da8; /* Darker blue on hover */
+        transform: scale(1.05); /* Slight scale on hover */
+    }
+    
+    /* Adding a search icon in the input (optional) */
+    #search-author::placeholder {
+        color: #aaa;
+    }
+    
+    /* Adjusting the button styles to align with the mockup\'s visual design */
+    .filters input, .filters button {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+        .filters strong {
+
+    color: #8e8e8e;
+    margin-right: 33px;
+}
+    .inovalon-authors-list {
+    margin-top: 37px;
+}
+
+hr.minihr {
+    color: #8e8e8e;
+    opacity: 0.5;
+}
+
+span.business-unit{
+    display: inline;
+    background: #5a67d8;
+    color: #fff;
+    padding: 5px 22px;
+    border-radius: 20px;
+    font-size: 12px!important;
+    margin-bottom: 10px;
+    font-weight: 600;
+    text-transform:capitalize;
+}
+/* Container for the post cards */
+.inovalon-authors-list {
+    display: flex;
+    gap: 40px;
+    flex-wrap: wrap;
+   /* justify-content: space-between;  Distributes the cards evenly */
+}
+
+/* Individual post card styling */
+.post-card {
+   border: 1px solid #56565614;
+    border-radius: 8px;
+    overflow: hidden;
+    width:31%;
+    max-width: 31%;
+    flex: 1;
+    box-shadow: 0 6px 30px -10px #26262638;
+    flex: 1 1 calc(33.333% - 20px); /* 3 cards per row with gap adjustment */
+    display: flex;
+    flex-direction: column; /* Ensures content inside is stacked vertically */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s;
+    margin-bottom:30px;
+    background:#fff;
+}
+
+/* Hover effect on cards */
+.post-card:hover {
+    transform: translateY(-5px); /* Adds a subtle hover effect */
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+    .post-card {
+        flex: 1 1 calc(50% - 20px); /* 2 cards per row on medium screens */
+    }
+}
+
+@media (max-width: 768px) {
+    .post-card {
+        flex: 1 1 100%; /* 1 card per row on smaller screens */
+    }
+}
+
+.post-content-holder h3 {
+margin-top:10px;
+}
+.post-content-holder h3  a{
+    line-height: 24px!important;
+    font-size: 17px;
+    margin: 0 0 10px
+}
+
+
+
+.post-content-holder a {
+    display: inline-block;
+    margin-top: 10px;
+    color: #013d7a;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+}
+    .meta_excerpt {
+    font-size: 14px; color: #666;line-height:23px;
+    min-height:85px;
+}
+    .l-more {
+    text-align: center;
+}
+
+button#author-load-more-button {
+    padding: 13px 31px;
+    border: solid 1px #ebeaea;
+    border-radius: 8px;
+    background-color: #ffffff;
+    color: #013d7a;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s;
+}
+
+.nectar-circle-images__inner {
+                display: flex;
+                flex-wrap: nowrap;
+            }
+
+            .nectar-circle-images__image:not(.nectar-circle-images--text):before {
+                padding-bottom: 100%;
+                display: block;
+                content: " ";
+            }
+
+            .nectar-circle-images__image {
+                background-size: cover;
+                width: 35px;
+                height:35px;
+                background-position: center;
+                border-radius: 1000px;
+            }
+
+            .nectar-circle-images--text {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            #ajax-content-wrap .nectar-inherit-h5.nectar-circle-images--text {
+                font-size: 16px;
+            }
+
+            .nectar-circle-images {
+                display: flex;
+                align-items: center;
+                gap: 0;
+                position: a;
+            }
+
+            .nectar-circle-images__text {
+                line-height: 1;
+            }
+
+            .nectar-circle-images__text h3,.nectar-circle-images__text h4,.nectar-circle-images__text h5,.nectar-circle-images__text h6 {
+                margin-bottom: 0;
+            }
+
+            .nectar-circle-images__text {
+                font-size: .85em;
+            }
+
+            .nectar-circle-images.border_color_f7f7f7 .nectar-circle-images__image {
+                border: 2px solid #f7f7f7;
+            }
+
+.inov-authors span {
+    font-size: 15px;
+    font-weight: 600;
+    color: #6d6d6d;
+}
+
+.nectar-circle-images__inner a {
+    display: block;
+    width: 100%;
+    height: 100%;
+    margin-top: -100%;
+}
+    .authors span {
+    font-size: 15px;
+}
+select#filter-type {
+    width: 203px;
+}
+
+select#filter-topic {
+    width: 200px;
+}
+    ';    
+
+
+
+$script = "
+jQuery(document).ready(function ($) {
+    // Filtering logic
+  
+    function filterPosts() {
+    // Safely retrieve the value and provide a default empty string if undefined
+    var selectedTopic = jQuery('#filter-topic').val() || ''; 
+    var selectedType = jQuery('#filter-type').val() || '';
+
+    // Convert to lowercase and trim to avoid any casing or space issues
+    selectedTopic = selectedTopic.toString().trim().toLowerCase();
+    selectedType = selectedType.toString().trim().toLowerCase();
+
+    // Filter the cards based on selected topic and type
+    jQuery('.post-card').each(function () {
+        var card = jQuery(this);
+        var cardTopic = card.data('topic')?.toString().trim().toLowerCase() || '';
+        var cardType = card.data('type')?.toString().trim().toLowerCase() || '';
+
+        // Check if the card matches the filters
+        var matchesTopic = selectedTopic === '' || cardTopic === selectedTopic;
+        var matchesType = selectedType === '' || cardType === selectedType;
+
+        // Show or hide card based on matching filters
+        if (matchesTopic && matchesType) {
+            card.show();
+        } else {
+            card.hide();
+        }
+    });
+}
+ let paged = 2;
+    // Filter posts when topic or type changes
+    jQuery('#filter-topic, #filter-type').on('change', filterPosts);
+
+    // AJAX search functionality
+    jQuery('#search-button').on('click', function (e) {
+        e.preventDefault();
+       
+        var searchQuery = jQuery('#search-author').val().trim();
+        if (searchQuery!=''){
+        jQuery('.l-more').hide()
+            }
+          let button = jQuery(this);
+        let postType = button.data('type');
+        let tags = button.data('tags'); 
+        let per_page = button.data('per-page');
+
+        if (searchQuery === '') {
+            searchQuery ='%'
+           // return;
+        }
+
+        // Perform AJAX search
+        $.ajax({
+            url: inov_functions_params.ajax_url, 
+            type: 'POST',
+            data: {
+                action: 'search_by_author', 
+                query: searchQuery,
+                author:'".$atts['author_id']."',
+                post_type:postType,
+                per_page:per_page,
+                paged: paged,
+                view:'".$atts['view']."',
+                topic:getParameterByName('topic')
+            },
+            beforeSend: function () {
+                jQuery('#search-button').html('<i class=\"fa fa-circle-o-notch fa-spin\"></i>');
+            },
+            success: function (response) {
+                // Replace posts container with the new results
+                jQuery('.inovalon-authors-list').html(response);
+            },
+            error: function () {
+                alert('An error occurred while searching. Please try again.');
+            },
+            complete: function () {
+                // Reset button text
+                jQuery('#search-button').html('<span class=\"icon-salient-search\" aria-hidden=\"true\"></span>');
+            },
+        });
+    });
+
+      
+
+          jQuery('#search-author').on('keydown', function(event) {
+      
+        if (event.key === 'Enter' || event.keyCode === 13) {
+            event.preventDefault(); 
+            jQuery('#search-button').trigger('click')
+        }
+    });
+
+
+      jQuery('#author-load-more-button').on('click', function (e) {
+        e.preventDefault();
+
+        let button = jQuery(this);
+        let postType = button.data('type');
+        let authorId = button.data('author-id');
+        let tags = button.data('tags'); 
+        let per_page = button.data('per-page');
+        let topic  = getParameterByName('topic'); 
+       
+     
+
+        $.ajax({
+            url: inov_functions_params.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'author_load_more_posts',
+                nonce: nectarLove.loveNonce,
+                paged: paged,
+                post_type: postType,
+                author_id: '".$atts['author_id']."',
+                tags: tags,
+                topic:topic,
+                per_page:per_page,
+                view:'".$atts['view']."'
+            },
+            beforeSend: function () {
+                button.text('Loading...'); // Change button text while loading
+            },
+            success: function (response) {
+                if (response.trim() !== '<p>No more posts found.</p>') {
+                    jQuery('.inovalon-authors-list').append(response); // Append new posts
+                    paged++; // Increment the page count
+                    button.text('Load More'); // Reset button text
+                } else {
+                    button.text('No More Posts').prop('disabled', true); // Disable if no more posts
+                }
+            },
+            error: function () {
+                button.text('Error, try again'); // Show error message
+            }
+        });
+    });
+
+        jQuery('select[name=\"tags-dropdown\"]').on('change', function () {
+        var selectedTopic = jQuery(this).val(); // Get the selected value
+        
+        // If a topic is selected, reload the page with the topic parameter
+       
+        if (selectedTopic) {
+            var newUrl = new URL(window.location.href); 
+            newUrl.searchParams.set('topic', selectedTopic); 
+            window.location.href = newUrl.toString(); 
+        }else{
+         window.location.href = '/resources/research-publications/';
+
+    }
+    });
+
+
+});";
+
+    // Check if there are posts
+    echo '<style>' . $search_section_styles . '</style>';
+    if($atts['view']=="research"){
+        $fargs = array(
+            'taxonomy' => 'post_tag', // Fetch tags
+            'hide_empty' => true, // Only show tags that have posts
+            'object_ids' => get_posts(array(
+                'post_type' => 'publications',
+                'fields' => 'ids', // Get only post IDs to optimize the query
+                'posts_per_page' => -1, // Fetch all posts
+                'status'=>'published'
+            )),
+        );
+        
+        // Get the terms based on the arguments
+        $ftags = get_terms($fargs);
+        
+        // Initialize the dropdown variable
+        $dropdown = '';
+        
+        // Check if any tags were found
+        if (!empty($ftags) && !is_wp_error($ftags)) {
+            $dropdown .= '<select name="tags-dropdown">';
+            $dropdown .= '<option value="">All Topics</option>'; // Optional default option
+        
+            // Loop through each tag and build the options with count
+            foreach ($ftags as $ftag) {
+                $dropdown .= '<option value="' . esc_attr($ftag->slug) . '">';
+                $dropdown .= esc_html($ftag->name) . ' (' . esc_html($ftag->count) . ')'; // Display tag name with count
+                $dropdown .= '</option>';
+            }
+        
+            $dropdown .= '</select>';
+        } 
+        //research and publication filters 
+        $filters= '<!-- Filters -->
+        <div class="filters">
+        <strong>Authored Content</strong>
+         <div class="filter-selects">
+            '.$dropdown.'
+        
+            <select id="filter-type">
+                <option value="">Type</option>
+                <option value="poster-presentation">Presentation</option>
+                <option value="peer-reviewed-article">Peer-Reviewed Article</option>
+            
+             
+            </select>
+            </div>
+         <div class="search-container">
+            <input type="text" id="search-author" placeholder="Search publications">
+            <button id="search-button" data-per-page='.$atts['per_page'].' data-type='.$atts['post_type'].'><span class="icon-salient-search" aria-hidden="true"></span></button>
+            </div>
+        </div>
+        <hr class="minihr">';
+    }else{
+        $filters= '<!-- Filters -->
+<div class="filters">
+<strong>Authored Content</strong>
+ <div class="filter-selects">
+    <select id="filter-topic">
+        <option value="">All Topics</option>
+        <option value="payer">Payer</option>
+        <option value="provider">Provider</option>
+        <option value="pharmacy">Pharmacy</option>
+        <option value="insights">Life Sciences</option>
+       
+    </select>
+
+    <select id="filter-type">
+        <option value="">All Resource Types</option>
+        <option value="blog">Blog</option>
+        <option value="publications">Research & Publications</option>
+        <option value="podcast">Podcast</option>
+        <option value="video">Video</option>
+        <option value="white-paper">White Paper</option>
+     
+    </select>
+    </div>
+ <div class="search-container">
+    <input type="text" id="search-author" placeholder="Search by author">
+    <button id="search-button" data-per-page='.$atts['per_page'].' data-type='.$atts['post_type'].'><span class="icon-salient-search" aria-hidden="true"></span></button>
+    </div>
+</div>
+<hr class="minihr">';
+    }
+
+    echo $filters;
+    if ($query->have_posts()) {
+        echo '<div class="inovalon-authors-list">';
+
+        // Loop through posts
+        while ($query->have_posts()) {
+            $query->the_post();
+            $featured_image = get_the_post_thumbnail_url(get_the_ID(), 'full');
+            if($featured_image==""){
+            $featured_image="https://www.inovalon.com/wp-content/uploads/2024/04/thumb-1.jpg";
+            }
+          //  $featured_image="https://www.inovalon.com/wp-content/uploads/2024/04/thumb-1.jpg";
+            // Get the business unit meta value
+            $business_unit = get_post_meta(get_the_ID(), 'business_unit', true);
+            $content_type = get_post_meta(get_the_ID(), 'content_type', true);
+            $external_link  = get_post_meta(get_the_ID(),'link_to_publication',true);
+            //extra_categories
+            if($atts['view']=="research"){
+                $pres_type = get_post_meta(get_the_ID(), 'extra_categories', true);
+                $all_authors = get_field('all_authors',get_the_ID());
+                $names_array = explode(',' , $all_authors);
+                $authors_span='';
+                $permalink='';
+            
+                $post_type = 'authors';
+
+
+                foreach( $names_array as $key => $name ){
+                $last_only = explode(" ",ltrim($name));
+              
+                $permalink = search_custom_post_type($last_only[0], $post_type);
+              
+                if ($permalink !="") {
+                    $authors_span .=  "<span><a class='author_link' href='{$permalink}'>{$name}</a></span>";
+                  } else {
+                    $authors_span .=  "<span>{$name}</span>";
+                  }
+           
+                $authors_span .= ( ( $key < ( count( $names_array ) -1 ) ) ? ', ':'' );
+    
+                }
+                if($all_authors){
+                $authors = '<div class="authors">'.$authors_span.'</div>';
+                }
+                
+            }
+          
+            $excerpt = get_the_excerpt();
+            $tags = wp_get_post_tags(get_the_ID());
+            $tag_names = [];
+            $tag_spans =[];
+            foreach ($tags as $tag) {
+                $tag_names[] = strtolower($tag->name);
+                $tag_spans[] = '<span class="business-unit">' . ucfirst($tag->name) . '</span>';
+            }
+            $tag_string = implode(', ', $tag_names);
+            if (empty($excerpt)) {
+                $excerpt =get_post_meta(get_the_ID(), '_yoast_wpseo_metadesc', true);
+                $excerpt = str_replace(' Learn more.','',$excerpt );
+                $excerpt = str_replace('Blog: ','',$excerpt );
+                $excerpt = str_replace('Success story: ','',$excerpt );
+              
+            }
+            $terms = get_the_terms(get_the_ID(), 'resource_categories');
+    
+
+            if ($terms && !is_wp_error($terms)) {
+                // Define your predefined set of strings
+                $predefined_list = array("overviews","blog", "infographic", "infographics","podcast","podcasts", "product", "press release", "success story", "white paper","white papers","whitepaper","whitepapers", "video","videos");
+                // Variable to store the matched term
+                $matched_term = '';
+            
+                // Loop through each term
+                foreach ($terms as $term) {
+                    $term_name = strtolower($term->name);
+            
+                    if (substr($term_name, -1) === 's') {
+                        $term_name = rtrim($term_name, "s");
+                    } 
+                    
+            
+                    // Check for special case
+                    if ($term_name === 'case studies' || $term_name === 'case studie') {
+                        $matched_term = 'Case Study';
+                        break; // Exit the loop if a match is found
+                    }
+            
+                    if ($term_name === 'whitepapers' || $term_name === 'whitepaper' || $term_name === 'White Paper' || $term_name==='White Papers') {
+                        $matched_term = 'White Paper';
+                        break; // Exit the loop if a match is found
+                    }
+            
+                    
+            
+                    // Check if the term matches any in the predefined list
+                    if (in_array($term_name, $predefined_list)) {
+                        $matched_term = ucwords($term_name);
+                        break; // Exit the loop if a match is found
+                    }
+                }
+            
+                // Output the matched term (if any)
+               
+            } 
+          
+           
+            $content_type = $matched_term;
+
+            if (strtolower(get_post_type( get_the_ID() )) == "publications"){
+                $content_type = "publications";
+                $business_unit = $tag_string;
+
+            }
+
+            if (strtolower(get_post_type( get_the_ID() )) == "blogpost"){
+                $content_type = "blog";
+
+            }
+
+            if (strtolower(get_post_type( get_the_ID() )) == "newsrelease"){
+                $content_type = "news";
+
+            }
+
+            if($atts['view']=="research"){
+               if($excerpt ==""){
+                $excerpt = get_post_meta( get_the_ID(), 'full_summary', true );
+               }
+                if($pres_type=="Presentation"){
+                    $pres_type = "poster-presentation";
+                }
+                $content_type = $pres_type;
+            }
+
+            
+          
+            echo '<div class="post-card" data-topic="'.strtolower($business_unit).'" data-type="'.str_replace(' ','-', strtolower($content_type)).'" style="background-color: ' . esc_attr($atts['bg_color']) . '; ">';
+
+            // Display the featured image
+            if (has_post_thumbnail()) {
+                echo '<div class="post-image" style="width: 100%; height: 180px; overflow: hidden;">';
+                if($atts['view']=="research"){
+                    $auth_images ='';
+                    $inov_auths =  maybe_unserialize( get_post_meta( get_the_ID(), 'inov_author', true ) );
+                   // var_dump(is_array($inov_auths));
+                    if(!empty($inov_auths[0])){
+                        foreach ($inov_auths as $auth_id){
+                            $fimage = get_the_post_thumbnail_url($auth_id, 'full');
+                            if($fimage){
+                                $auth_images .= '<div class="nectar-circle-images__image nectar-circle-images__item loaded" style="z-index: 100; background-image: url('.$fimage.');"><a href="'.get_the_permalink($auth_id).'" title="'.get_the_title($auth_id).'"></a></div>';
+                                }else{
+                                    $fimage = 'https://www.inovalon.com/wp-content/uploads/2024/09/user_no_image.png';
+                                    $auth_images .= '<div class="nectar-circle-images__image nectar-circle-images__item loaded" style="z-index: 100; background-image: url('.$fimage.');"><a href="'.get_the_permalink($auth_id).'" title="'.get_the_title($auth_id).'" ></a></div>';
+        
+                                }
+                        }
+                        $experts = '<div class="inov-authors"><span>Inovalon Experts</span>
+                                    <div class="nectar-circle-images__inner">'.$auth_images.'</div></div>';
+                    }else{
+                        $experts ='';
+                    }
+                
+                    echo '<div class="extra-inf"><div class="pub-date">Published <span>'.get_the_date('F j, Y').'</span></div>';
+                    echo '<div class="poster-type"><span>'.str_replace('-',' ', ucwords($pres_type)).'</span></div>';
+                    echo $experts;
+                    echo '</div>';
+
+                    }
+                echo '<img src="'.$featured_image.'" style="width: 100%; height: 100%; object-fit: cover;" >';
+                echo '</div>';
+            } else {
+                echo '<div class="post-image" style="width: 100%; height: 180px; background: #f0f0f0; display: flex; align-items: center; justify-content: center;">';
+                if($atts['view']=="research"){
+                    $auth_images ='';
+                    $inov_auths =  maybe_unserialize( get_post_meta( get_the_ID(), 'inov_author', true ) );
+                   
+                    if(!empty($inov_auths[0])){
+                        foreach ($inov_auths as $auth_id){
+                            $fimage = get_the_post_thumbnail_url($auth_id, 'full');
+                            if($fimage){
+                            $auth_images .= '<div class="nectar-circle-images__image nectar-circle-images__item loaded" style="z-index: 100; background-image: url('.$fimage.');"><a href="'.get_the_permalink($auth_id).'" title="'.get_the_title($auth_id).'"></a></div>';
+                            }else{
+                                $fimage = 'https://www.inovalon.com/wp-content/uploads/2024/09/user_no_image.png';
+                                $auth_images .= '<div class="nectar-circle-images__image nectar-circle-images__item loaded" style="z-index: 100; background-image: url('.$fimage.');"><a href="'.get_the_permalink($auth_id).'" title="'.get_the_title($auth_id).'" ></a></div>';
+    
+                            }
+                        }
+                        $experts = '<div class="inov-authors"><span>Inovalon Experts</span>
+                                    <div class="nectar-circle-images__inner">'.$auth_images.'</div></div>';
+                    }else{
+                        $experts ='';
+                    }
+                
+                    echo '<div class="extra-inf"><div class="pub-date">Published <span>'.get_the_date('F j, Y').'</span></div>';
+                    echo '<div class="poster-type"><span>'.str_replace('-',' ', ucwords($pres_type)).'</span></div>';
+                    echo $experts;
+                    echo '</div>';
+
+                    }
+                echo '<img src="https://www.inovalon.com/wp-content/uploads/2024/04/thumb-1.jpg" alt="Placeholder">'; 
+                echo '</div>';
+            }
+
+            // Post details
+            echo '<div class="post-content-holder" style="padding: 16px;">';
+
+            // Display the business unit
+            if (!empty($business_unit)) {
+                if($atts['view']=="research"){
+                    echo implode(' ',$tag_spans);
+                   
+                }else{
+                    echo '<span class="business-unit">' . ucfirst($business_unit) . '</span>';
+                }
+               
+            }
+
+            // Display the title
+          // Display the title
+          $post_title ='<h3><a href="' . get_permalink() . '" style="text-decoration: none; color: #333;">' . get_the_title() . '</a></h3>';
+                
+          if($external_link != ''){
+              $post_title = '<h3><a href="' . $external_link . '" style="text-decoration: none; color: #333;" target="_blank">' . get_the_title() . '</a></h3>';
+          }
+          if($external_link == '#'){
+              $post_title = '<h3 style="font-size:17px; line-height:24px">' . get_the_title() . '</h3>';
+          }
+          echo $post_title;
+         
+         
+          
+            echo $authors;
+            // Display the excerpt
+            echo '<div class="meta_excerpt"><p>' .$excerpt. '</p></div>';
+
+          // Read More link
+          $post_link='<a href="' . get_permalink() . '">Read More &rarr;</a>';
+          if($external_link != ''){
+          $post_link = '<a href="' . $external_link . '" target="_blank">Read More &rarr;</a>';
+          }
+
+          if($external_link == '#'){
+              $post_link = '';
+          }
+          echo $post_link;
+           
+
+            echo '</div>'; // .post-content
+            echo '</div>'; // .post-card
+        }
+
+        echo '</div>
+        <div class="l-more"><button id="author-load-more-button" data-per-page='.$atts['per_page'].' data-type='.$atts['post_type'].'>Load More <i class="fa-solid fa-chevron-down"></i></button></div>
+        <script type="text/javascript">'.$script.'</script>'; // .inovalon-authors-list
+    } else {
+        echo 'No posts found.';
+    }
+
+    // Reset post data
+    wp_reset_postdata();
+
+    // Return the output
+    return ob_get_clean();
+}
+
+// Register the shortcode
+add_shortcode('inovalon_authors', 'inovalon_authors_shortcode');
+
+function authors_list_shortcode(){
+    $auth_images ='';
+    $inov_auths =  maybe_unserialize( get_post_meta( get_the_ID(), 'inov_author', true ) );
+  
+    if(is_array($inov_auths)){
+        foreach ($inov_auths as $auth_id){
+            $fimage = get_the_post_thumbnail_url($auth_id, 'full');
+
+            
+            if($fimage){
+                $auth_images .= '<div class="nectar-circle-images__image nectar-circle-images__item loaded" style="z-index: 100; background-image: url('.$fimage.');height:35px;"><a href="'.get_the_permalink($auth_id).'" title="'.get_the_title($auth_id).'"></a></div>';
+                }else{
+                    $fimage = 'https://www.inovalon.com/wp-content/uploads/2024/09/user_no_image.png';
+                    $auth_images .= '<div class="nectar-circle-images__image nectar-circle-images__item loaded" style="z-index: 100; background-image: url('.$fimage.'); height:35px;"><a href="'.get_the_permalink($auth_id).'" title="'.get_the_title($auth_id).'" ></a></div>';
+
+                }
+        }
+        $experts = '<div class="inov-authors"><span>Inovalon Experts</span>
+                    <div class="nectar-circle-images__inner">'.$auth_images.'</div></div>';
+    }else{
+        $experts ='';
+    }
+
+    return $experts;
+
+}
+
+add_shortcode('authors_list', 'authors_list_shortcode');
+
+function get_post_tags_shortcode(){
+    $tags = wp_get_post_tags(get_the_ID());
+    $tag_names = [];
+    $tag_spans ="";
+    if(!empty($tags)){
+    $tag_spans.= "<div class='p-tags'><p>Tags</p>";
+    foreach ($tags as $tag) {
+        $tag_names[] = strtolower($tag->name);
+        $tag_spans .= '<span class="business-unit">' . ucfirst($tag->name) . '</span>';
+    }
+    $tag_spans.= "</div>";
+    }
+    return $tag_spans;
+}
+
+add_shortcode('get_the_tags', 'get_post_tags_shortcode');
+
+// Add settings page to admin menu
+function custom_js_settings_page() {
+    add_options_page(
+        'Custom JavaScript',           // Page title
+        'Custom JavaScript',           // Menu title
+        'manage_options',             // Capability
+        'custom-javascript',          // Menu slug
+        'custom_js_settings_page_html' // Callback function
+    );
+}
+add_action('admin_menu', 'custom_js_settings_page');
+
+// Register settings
+function custom_js_settings_init() {
+    // Register settings with no sanitization
+    register_setting('custom_js_settings', 'custom_js_code', array(
+        'sanitize_callback' => 'wp_unslash'
+    ));
+    register_setting('custom_js_settings', 'custom_js_enabled', array(
+        'sanitize_callback' => 'rest_sanitize_boolean'
+    ));
+    register_setting('custom_js_settings', 'custom_js_scope', array(
+        'sanitize_callback' => 'sanitize_text_field'
+    ));
+    register_setting('custom_js_settings', 'custom_js_pages', array(
+        'sanitize_callback' => 'wp_unslash'
+    ));
+    
+    // Add settings section
+    add_settings_section(
+        'custom_js_section',
+        'JavaScript Code',
+        'custom_js_section_callback',
+        'custom_js_settings'
+    );
+    
+    // Add settings fields
+    add_settings_field(
+        'custom_js_enabled',
+        'Enable Custom JavaScript',
+        'custom_js_enabled_callback',
+        'custom_js_settings',
+        'custom_js_section'
+    );
+    
+    add_settings_field(
+        'custom_js_scope',
+        'Display Scope',
+        'custom_js_scope_callback',
+        'custom_js_settings',
+        'custom_js_section'
+    );
+    
+    add_settings_field(
+        'custom_js_pages',
+        'Specific Pages',
+        'custom_js_pages_callback',
+        'custom_js_settings',
+        'custom_js_section'
+    );
+    
+    add_settings_field(
+        'custom_js_code',
+        'Custom JavaScript/HTML',
+        'custom_js_field_callback',
+        'custom_js_settings',
+        'custom_js_section'
+    );
+}
+add_action('admin_init', 'custom_js_settings_init');
+
+// Settings section description
+function custom_js_section_callback() {
+    echo '<p>Add your custom JavaScript code below. Configure when and where it should be displayed.</p>';
+}
+
+// Enable/disable toggle callback
+function custom_js_enabled_callback() {
+    $enabled = get_option('custom_js_enabled', true);
+    echo '<input type="checkbox" name="custom_js_enabled" id="custom_js_enabled" value="1" ' . checked(1, $enabled, false) . ' />';
+    echo '<label for="custom_js_enabled"> Enable custom JavaScript output</label>';
+}
+
+// Scope selection callback
+function custom_js_scope_callback() {
+    $scope = get_option('custom_js_scope', 'sitewide');
+    echo '<select name="custom_js_scope" id="custom_js_scope">';
+    echo '<option value="sitewide" ' . selected($scope, 'sitewide', false) . '>Sitewide (all pages)</option>';
+    echo '<option value="specific" ' . selected($scope, 'specific', false) . '>Specific pages only</option>';
+    echo '</select>';
+    echo '<p class="description">Choose whether to display on all pages or only specific pages.</p>';
+}
+
+// Specific pages callback
+function custom_js_pages_callback() {
+    $pages = get_option('custom_js_pages', '');
+    $scope = get_option('custom_js_scope', 'sitewide');
+    $style = ($scope === 'specific') ? '' : 'style="display:none;"';
+    
+    echo '<div id="custom_js_pages_wrapper" ' . $style . '>';
+    echo '<textarea name="custom_js_pages" id="custom_js_pages" rows="5" cols="80" style="width: 100%; font-family: monospace;">' . $pages . '</textarea>';
+    echo '<p class="description">Enter page URLs, slugs, or IDs (one per line). Examples:<br>';
+    echo '• <code>home</code> (for homepage)<br>';
+    echo '• <code>about</code> (page slug)<br>';
+    echo '• <code>123</code> (page ID)<br>';
+    echo '• <code>/contact/</code> (full path)<br>';
+    echo '• <code>product</code> (for single product pages in WooCommerce)</p>';
+    echo '</div>';
+    
+    // Add JavaScript to show/hide the pages field
+    echo '<script>
+    document.getElementById("custom_js_scope").addEventListener("change", function() {
+        var wrapper = document.getElementById("custom_js_pages_wrapper");
+        if (this.value === "specific") {
+            wrapper.style.display = "block";
+        } else {
+            wrapper.style.display = "none";
+        }
+    });
+    </script>';
+}
+
+// Settings field callback
+function custom_js_field_callback() {
+    $value = get_option('custom_js_code', '');
+    echo '<textarea name="custom_js_code" id="custom_js_code" rows="15" cols="80" style="width: 100%; font-family: monospace;">' . $value . '</textarea>';
+    echo '<p class="description">Enter your complete JavaScript/HTML code here (including &lt;script&gt; tags if needed). This will be output in the &lt;head&gt; section before other scripts load.</p>';
+}
+
+// Settings page HTML
+function custom_js_settings_page_html() {
+    // Check user capabilities
+    if (!current_user_can('manage_options')) {
+        return;
+    }
+    
+    // Show success message if settings were updated
+    if (isset($_GET['settings-updated'])) {
+        add_settings_error('custom_js_messages', 'custom_js_message', 'Settings Saved', 'updated');
+    }
+    
+    // Show error/update messages
+    settings_errors('custom_js_messages');
+    ?>
+    <div class="wrap">
+        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+        <form action="options.php" method="post">
+            <?php
+            settings_fields('custom_js_settings');
+            do_settings_sections('custom_js_settings');
+            submit_button('Save JavaScript Code');
+            ?>
+        </form>
+    </div>
+    <?php
+}
+
+// Output custom JavaScript/HTML in head (before other scripts)
+function output_custom_javascript() {
+    // Check if custom JS is enabled
+    $enabled = get_option('custom_js_enabled', true);
+    if (!$enabled) {
+        return;
+    }
+    
+    $custom_js = get_option('custom_js_code', '');
+    if (empty($custom_js)) {
+        return;
+    }
+    
+    // Check scope settings
+    $scope = get_option('custom_js_scope', 'sitewide');
+    
+    if ($scope === 'specific') {
+        $specific_pages = get_option('custom_js_pages', '');
+        if (empty($specific_pages)) {
+            return;
+        }
+        
+        // Check if current page matches any of the specified pages
+        if (!is_current_page_specified($specific_pages)) {
+            return;
+        }
+    }
+    
+    // Output the custom JavaScript/HTML
+    echo "\n<!-- Custom JavaScript/HTML -->\n";
+    echo $custom_js . "\n";
+    echo "<!-- End Custom JavaScript/HTML -->\n\n";
+}
+
+// Helper function to check if current page is in the specified list
+function is_current_page_specified($pages_string) {
+    $pages = array_filter(array_map('trim', explode("\n", $pages_string)));
+    
+    if (empty($pages)) {
+        return false;
+    }
+    
+    global $post;
+    $current_url = $_SERVER['REQUEST_URI'];
+    
+    foreach ($pages as $page) {
+        // Check for homepage
+        if ($page === 'home' && is_front_page()) {
+            return true;
+        }
+        
+        // Check for page ID
+        if (is_numeric($page) && is_page($page)) {
+            return true;
+        }
+        
+        // Check for page slug
+        if (is_page($page)) {
+            return true;
+        }
+        
+        // Check for post type (like 'product' for WooCommerce)
+        if (is_singular($page)) {
+            return true;
+        }
+        
+        // Check for URL path match
+        if (strpos($current_url, $page) !== false) {
+            return true;
+        }
+        
+        // Check for exact URL match
+        if ($current_url === $page) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+// Priority 1 ensures this loads before most other scripts
+add_action('wp_head', 'output_custom_javascript', 1);
+?>
